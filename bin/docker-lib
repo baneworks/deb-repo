@@ -1,0 +1,43 @@
+# region #!docker funcs
+
+# get container pid
+function get_dc_id () {
+  local pid
+  pid=$(docker inspect -f '{{.State.Pid}}' $DC_NAME)
+  [ $pid -ge 1 ] || error 1 NOCONTAINER "no debian container running"
+  echo $(( $pid ))
+}
+GUEST_PID=$(get_dc_id)
+
+# get /proc path for tag: proc_path <tagName> <path>
+function proc_path () {
+  local dir
+  if [ -z $1 ]; then
+    dir="/proc/$GUEST_PID/root/home/$DC_USER/$REPO_NAME"
+  elif [ -z $2 ]; then
+    dir="/proc/$GUEST_PID/root/$(tag_to_dir $1)"
+  else
+    dir="/proc/$GUEST_PID/root/$(tag_to_dir $1)/$2"
+  fi
+  echo $dir
+}
+
+# create repo dir $REPO_NAME
+docker_mk_repo() {
+  docker exec -u $DC_USER:$DC_GROUP -w "/home/$DC_USER" $DC_NAME mkdir $(tag "repo" )
+}
+
+# execute docker command inside $REPO_NAME: docker_exec <command>
+docker_exec() {
+  docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO" $DC_NAME $@
+}
+
+# execute docker command inside dir: docker_dir_exec <dir> <command>
+docker_dir_exec() {
+  local reldir
+  reldir=$1
+  shift;
+  docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO/$reldir/" $DC_NAME $@
+}
+
+#endregion
