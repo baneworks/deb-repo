@@ -1,10 +1,7 @@
 ---
 title: deb-repo
-author: Rinat Levchuk
 keywords: [linux, nix, debian, debian bullseye, dpkg]
 date: 2023-07-31
-lang: ru-RU
-fontsize: 12pt
 ---
 
 # deb-repo-test
