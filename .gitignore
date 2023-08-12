@@ -1,3 +1,6 @@
 .build-reqs
 .vscode
 .direnv
+result
+deb.debian.org_*
+.prev_image

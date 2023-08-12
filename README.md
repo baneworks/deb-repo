@@ -58,14 +58,7 @@ container and trying to build a package.
 ./run-debian-bullseye
 ```
 
-2. Rename the resulting container to `debian` and run again:
-
-```sh
-docker rename `docker ps | sed -n "s/\(.*\)\sdebian:bullseye.*/\1/p"` debian
-docker start -i debian
-```
-
-3. Run `~/dev/deb-repo/make-repo` on the host and wait for the build to complete.
+2. Run `~/dev/deb-repo/make-repo` on the host and wait for the build to complete.
 
 # TODO
 
