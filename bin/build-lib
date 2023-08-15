@@ -1,0 +1,377 @@
+# region #! globals
+
+#! constraints
+BREQ_MAX_DEPTH=17
+
+#! build-reqs dir
+BREQ_DIR="${PROJ_DIR}/.build-reqs"
+
+# endregion
+
+# region #! include
+
+. ./bin/bspec-lib
+
+# endregion
+
+# region #! breq strings funcs
+
+# pack depends to spaceless string: breqPackString <string>
+breqPackString() {
+  local str="$1"
+  # str=$(tr -cd '[:print:]' <<< "$str")
+  str="${str//' '/'&'}"
+  echo "$str"
+}
+
+# unpack spaceless string: breqUnpackString <string>
+breqUnpackString() {
+  local str="$1"
+  str="${str//'&'/' '}"
+  echo "$str"
+}
+
+# unpack and call taskParseBR: breqParsePacked <string>
+breqParsePacked() {
+  local unpacked=$(breqUnpackString "$1")
+  local breqs=$(taskParseBR "$unpacked")
+  echo "${breqs[*]}"
+}
+
+# endregion
+
+# region #! version funcs
+
+# utility for breqCompare: breqConditionOp <condition>
+breqConditionOp() {
+  local cond_op="$1"
+  cond_op=$(tr -cd '[:print:]' <<< "$cond_op")
+  cond_op=($cond_op)
+  local target="${cond_op[1]}"
+  cond_op="${cond_op[0]}"
+  echo "$cond_op"
+}
+
+# utility for breqCompare: breqConditionTarget <condition>
+breqConditionTarget() {
+  local cond_op="$1"
+  cond_op=$(tr -cd '[:print:]' <<< "$cond_op")
+  cond_op=($cond_op)
+  local target="${cond_op[1]}"
+  echo "$target"
+}
+
+# utility for breqCompare: breqIsGreater <condition> <version>
+breqIsGreater() {
+  local target=$(breqConditionTarget "$1")
+  local version="$2"
+
+  local res=""
+  local va=(${version//./ })
+  local ca=(${target//./ })
+
+  # compare the major ver
+  if [[ ${va[0]} -gt ${ca[0]} ]]; then
+    res="true"
+  else
+    # Compare the minor ver
+    if [[ ${va[1]} -gt ${ca[1]} ]]; then
+      res="true"
+    else
+      # Compare the patch ver
+      if [[ ${va[2]} -gt ${ca[2]} ]]; then
+        res="true"
+      fi
+    fi
+  fi
+  echo "$res"
+}
+
+# utility for breqCompare: breqIsGreaterOrEqual <condition> <version>
+breqIsGreaterOrEqual() {
+  local target=$(breqConditionTarget "$1")
+  local version="$2"
+
+  local res=""
+  local va=(${version//./ })
+  local ca=(${target//./ })
+
+  # compare the major ver
+  if [[ ${va[0]} -gt ${ca[0]} ]]; then
+    res="true"
+  else
+    # Compare the minor ver
+    if [[ ${va[1]} -gt ${ca[1]} ]]; then
+      res="true"
+    else
+      # Compare the patch ver
+      if [[ ${va[2]} -ge ${ca[2]} ]]; then
+        res="true"
+      fi
+    fi
+  fi
+  echo "$res"
+}
+
+# utility for breqCompare: breqIsEqual <condition> <version>
+breqIsEqual() {
+  local target=$(breqConditionTarget "$1")
+  local version="$2"
+  local res=""
+  [[ $target == $version ]] && res="true"
+  echo "$res"
+}
+
+# compares version with predicate: breqParsePacked <condition> <version>
+breqCompare() {
+  local cond="$1"
+  local ver="$2"
+
+  local cond_op=($cond)
+  local target=${cond_op[1]}
+  cond_op=${cond_op[0]}
+
+  case "$cond_op" in
+    '=' ) echo $(breqIsEqual "$cond" "$ver") ;;
+    '>' ) echo $(breqIsGreater "$cond" "$ver") ;;
+    '>=') echo $(breqIsGreaterOrEqual "$cond" "$ver") ;;
+    *)
+      error 1 "breqCompare" "unknown version condition"
+      return 1
+    ;;
+  esac
+}
+
+# check version reqs and return index of suitable: breqWhichVersion <cond> <@versions>
+breqWhichVersion() {
+  local cond="$1"
+  shift
+  local avail=($@)
+
+  local found=""
+  for ((idx=0; idx < ${#avail[@]}; ++idx)); do
+    local retval=$(breqCompare "$cond" "${avail[$idx]}")
+    if [[ "$retval" ]]; then
+      found="true"
+      break
+    fi
+  done
+
+  [[ -z $found ]] && return -1
+
+  return "$idx"
+}
+
+# endregion
+
+# region #! node funcs
+
+# print node tag
+breqPrintMsg() {
+  local pth="$1"
+  pth=(${pth//'/'/ })
+  local len=${#pth[@]}
+  len+=-1
+  local head
+  head="${pth[@]:0:$len}"
+  local hd
+  for h in "${head[@]}"; do
+    hd+="$h "
+  done
+  last="${pth[-1]}"
+  (printf "\n${COLOR_OFF}[$hd${COLOR_GREEN}$last${COLOR_OFF}] $2") >&2
+}
+
+# print message
+breqPrintStatus() {
+  case "$1" in
+      'ok') (printf "[ ${COLOR_GREEN}$2${COLOR_OFF} ]") >&2 ;;
+   'nodep') (printf "[ ${COLOR_YELLOW}!dep${COLOR_OFF} ] ... ") >&2 ;;
+    'have') (printf "[ ${COLOR_YELLOW}+$2${COLOR_OFF} ] ... ") >&2 ;;
+    'note') (printf "[ ${COLOR_YELLOW}$2${COLOR_OFF} ]") >&2 ;;
+     'err') (printf "[ ${COLOR_RED}$2${COLOR_OFF} ]\n") >&2 ;;
+         *) (printf "[ ${COLOR_RED}$2${COLOR_OFF} ]\n") >&2 ;;
+  esac
+}
+
+#! root node is special case, because depends is taking form DSC rather apt-cache
+# create root breq node: breqAddRoot <task> <bspec>
+breqAddRoot() {
+  local task=$1 bspec=$2
+
+  local bname=$(bspecName $bspec)
+  local bver=$(bspecVersionHR $bspec)
+
+  local req_dir="$BREQ_DIR/$task/$bname"
+
+  [[ -d "$req_dir" ]] || mkdir "$req_dir"
+  echo "$bname" > "$req_dir/.name"
+  echo "$bver" > "$req_dir/.version"
+  echo "$parent" > "$req_dir/.parent"
+
+  breqPrintMsg "$task/$bname" " ... "
+
+  local str="$(dockerAptCache "$bname")"
+
+  #? gathering depends
+  local dstr=$(breqPackString "$(sed -n 's/^Depends: \(.*\)$/\1/pg' <<< $str)")
+  local da
+  for line in ${dstr//"\n"/ }; do
+    line=$(tr -cd '[:print:]' <<< $line)
+    da+=($line)
+  done
+
+  if [[ ${#da[@]} -eq 0 ]]; then
+    breqPrintStatus "nodep"
+    return
+  fi
+
+  #? avaible versions
+  local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$str")
+  local va
+  for line in ${vstr//"\n"/ }; do
+    line=$(tr -cd '[:print:]' <<< $line)
+    va+=($line)
+  done
+
+  #? which version is needed
+  if ! [[ -z $bver ]]; then
+    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then
+      local idx=$(breqWhichVersion "$bver" "${va[@]}")
+      [[ $idx -eq -1 ]] && breqPrintStatus "err" "!ver"
+    fi
+  fi
+
+  #? this is our set
+  local bdeps="${da[$idx]}"
+
+  #? dive in, god save our souls
+  for curset_packed in "${bdeps[@]}"; do
+    local pa=($task $bname)
+    local curset=$(breqParsePacked $curset_packed)
+    for bi in ${curset[@]} ; do
+      local seen_before=$(grep -Fxc "$(bspecName $bi)" "$BREQ_DIR/$task/.flatten")
+      if [[ seen_before -gt 0 ]]; then
+        breqPrintStatus "have" "$(bspecName $bi)"
+      else
+        breqPrintStatus "ok" "OK"
+        echo $(bspecName $bi) >> "$BREQ_DIR/$task/.flatten"
+        breqAddNode "$task" "$bi" "${pa[@]}"
+      fi
+    done
+  done
+}
+
+# create root breq node: breqAddNode <task> <bspec> <@parents>
+breqAddNode() {
+  local task="$1" bspec="$2"
+  shift; shift
+  local pa=($@)
+  local parent="${pa[-1]}"
+
+  local bname=$(bspecName $bspec)
+  local bver=$(bspecVersionHR $bspec)
+
+  local pinfo
+  local req_dir="$BREQ_DIR"
+  for p in "${pa[@]}"; do
+    pinfo+="/$p"
+    req_dir+="/$p"
+  done
+  req_dir+="/$bname"
+  pinfo="${pinfo:1}"
+
+  [[ -d "$req_dir" ]] || mkdir "$req_dir"
+  echo "$bname" > "$req_dir/.name"
+  echo "$bver" > "$req_dir/.version"
+  echo "$parent" > "$req_dir/.parent"
+
+  breqPrintMsg "$pinfo/$bname" " ... "
+
+  local str="$(dockerAptCache "$bname")"
+
+  #? gathering depends
+  local dstr=$(breqPackString "$(sed -n 's/^Depends: \(.*\)$/\1/pg' <<< $str)")
+  local da
+  for line in ${dstr//"\n"/ }; do
+    line=$(tr -cd '[:print:]' <<< "$line")
+    da+=($line)
+  done
+
+  if [[ ${#da[@]} -eq 0 ]]; then
+    breqPrintStatus "nodep"
+    return
+  fi
+
+  #? avaible versions
+  local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$str")
+  local va
+  for line in ${vstr//"\n"/ }; do
+    line=$(tr -cd '[:print:]' <<< $line)
+    va+=($line)
+  done
+
+  #? which version is needed
+  if ! [[ -z $bver ]] && [[ $bane != "dh-autoreconf" ]]; then
+    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then
+      local idx=$(breqWhichVersion "$bver" "${va[@]}")
+      [[ $idx -eq -1 ]] && breqPrintStatus "err" "!ver"
+    fi
+  fi
+
+  #? this is our set
+  local bdeps="${da[$idx]}"
+
+  #? dive in, god save our souls
+  for curset_packed in "${bdeps[@]}"; do
+    pa+=("$bname")
+    local curset=$(breqParsePacked $curset_packed)
+    for bi in ${curset[@]} ; do
+      local seen_before=$(grep -Fxc "$(bspecName $bi)" "$BREQ_DIR/$task/.flatten")
+      if [[ seen_before -gt 0 ]]; then
+        breqPrintStatus "have" "$(bspecName $bi)"
+        break
+      else
+        breqPrintStatus "ok" "OK"
+        breqAddNode "$task" "$bi" "${pa[@]}"
+        echo $(bspecName $bi) >> "$BREQ_DIR/$task/.flatten"
+        break
+      fi
+    breqPrintStatus "ok" "OK"
+    done
+  done
+}
+
+# endregion
+
+# region #! build functions
+
+# init build process
+buildInit() {
+  # info buildInit "=== test mode ==="
+  guestClearFHS # fixme: test
+  guestCreateFHS # fixme: test
+}
+
+# build task: buildTask <task>
+buildTask() {
+  local task=$1 bspecs
+  taskInit $task
+  bspecs=$(taskReqs $task)
+  for bs in ${bspecs[@]}; do
+    breqAddRoot "$task" "$bs"
+    # break # fixme: test
+  done
+}
+
+# build all tasks: buildAll
+buildAll() {
+  buildInit
+  for task in $(taskList); do
+    buildTask $task
+    break # fixme: test
+  done
+}
+
+# endregion
+

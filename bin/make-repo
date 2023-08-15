@@ -1,197 +1,30 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-# region #! variables
+# region #! globals
 
-#! docker container info
-DC_NAME="debian"
-DC_USER="mtain"
-DC_GROUP="users"
-REPO_NAME="deb-repo"
-DC_REPO="home/$DC_USER/$REPO_NAME"
-
-#! tags
-TAG_SH="bin"
-TAG_DSRC="dsrc"
-TAG_DBIN="dbin"
-TAG_TMP="tmp"
-TAG_SH_DIR="$DC_REPO/$TAG_SH" #? "sh" tag
-TAG_DSRC_DIR="$DC_REPO/$TAG_DSRC" #? "dsrc" tag
-TAG_DBIN_DIR="$DC_REPO/$TAG_DBIN" #? "dbin" tag
-TAG_TMP_DIR="$DC_REPO/$TAG_TMP" #? "tmp" tag
+PROJ_DIR="/home/bane/dev/deb-repo"
+SWD=$(pwd)
 
 #! task
-TASK_FILE="../packages.built"
-
-#! build-reqs dir
-BREQ_DIR="../.build-reqs"
+TASK_FILE="${PROJ_DIR}/packages.built"
 
 # endregion
 
-. ./misc # exit, warning, info
-. ./tags # tags functions
-. ./docker-lib # helpers for docker
+# region #! include
 
-# region #!repo funcs
-
-# create guest fhs
-function create_ghost_fhs () {
-  local sh dbin dsrc tmp wdir
-  sh=$( proc_path "sh" )
-  dbin=$( proc_path "dbin" )
-  dsrc=$( proc_path "dsrc" )
-  tmp=$( proc_path "tmp" )
-  wdir=$( proc_path )
-  if [ ! -d $wdir ]; then
-    warning "$wdir not exists"
-    docker_mk_repo
-    # docker exec -u $DC_USER:$DC_GROUP -w "/home/$DC_USER" $DC_NAME mkdir $(tag "repo" )
-  fi
-  if [ ! -d $sh ]; then
-    warning "$sh doesn't exist"
-    docker_exec mkdir $(tag "sh")
-    # docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO" $DC_NAME mkdir $(tag "sh" )
-  fi
-  if [ ! -d $dbin ]; then
-    warning "$dbin doesn't exist"
-    docker_exec mkdir $(tag "dbin")
-    # docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO" $DC_NAME mkdir $(tag "dbin" )
-  fi
-  if [ ! -d $dsrc ]; then
-    warning "$dsrc doesn't exist"
-    docker_exec mkdir $(tag "dsrc")
-    # docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO" $DC_NAME mkdir $(tag "dsrc" )
-  fi
-  if [ ! -d $tmp ]; then
-    warning "$tmp doesn't exist"
-    docker_exec mkdir $(tag "tmp")
-    # docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO" $DC_NAME mkdir $(tag "tmp" )
-  fi
-}
-# endregion
-
-# region #!task funcs
-
-# return task list from taskfile
-tasks() {
-  echo $( cat $TASK_FILE | tr "\n" ' '  )
-}
-
-# make task dir: task_mkdir <task>
-task_mkdir() {
-  local srcdir bindir tmpdir
-  srcdir=$(tag "dsrc")"/$1"
-  bindir=$(tag "dbin")"/$1"
-  tmpdir=$(tag "tmp")"/$1"
-  # docker_exec mkdir $srcdir # fixme: enable after testing
-  docker_exec mkdir $bindir
-  docker_exec mkdir $tmpdir
-}
-
-# purge all from task dir: task_clear <task>
-task_clear() {
-  local srcdir bindir tmpdir
-  srcdir=$(tag "dsrc")"/$1"
-  bindir=$(tag "dbin")"/$1"
-  tmpdir=$(tag "tmp")"/$1"
-  # docker_exec rm -rf $srcdir # fixme: enable after testing
-  docker_exec rm -rf  $bindir
-  docker_exec rm -rf  $tmpdir
-}
-
-# prepare for task: task_init <task>
-task_init() {
-  local task
-  task=$1
-  wdir=$(tag_to_dir "dsrc")"/$1"
-  if [ -d $(proc_path "dbin" $task) ] ||
-    #  [ -d $(proc_path "dsrc" $task) ] || # fixme: enable after testing
-     [ -d $(proc_path "tmp" $task) ]
-  then
-    info $task "clearing dirs ..."
-    task_clear $task
-  fi
-  info $task "creating dirs ..."
-  task_mkdir $task
-  #? calling apt-get source with -d as we not have dpkg-source
-  # docker_dir_exec $(tag "dsrc")"/$task" apt-get source -d $task # fixme: enable after testing
-}
-
-# get task dcs filename: task_get_dsc <task>
-task_get_dsc () {
-  local dsc task
-  task=$1
-  dsc=$(ls $(proc_path "dsrc" "$task/*.dsc"))
-  [ $(echo $dsc | wc -l) -eq 1 ] || error 1 EDSC "messed up with DSC file [$task]"
-  echo $dsc
-}
-
-# return name part from bspec : get_name_from_bspec <breq_spec>
-get_name_from_bspec () {
-  local bspec bname
-  bspec=$1
-  # fixme: i hate sed
-  bname=$(echo "$bspec" | sed -n "s/\([0-9a-z\-]*\)\(~\[\(.*\)\]\)*/\1/1p")
-  echo $bname
-}
-
-# return version part from bspec : get_version_from_bspec <breq_spec>
-get_version_from_bspec () {
-  local bspec bver
-  bspec=$1
-  # fixme: i hate sed
-  bver=$(echo "$bspec" | sed -n "s/\([0-9a-z\-]*\)\(~\[\(.*\)\]\)*/\3/1p")
-  echo $bver
-}
-
-# parse task dcs: task_get_reqs <task>
-task_get_reqs() {
-  local dsc task breqs orig_breqs
-  task=$1
-  dsc=$(task_get_dsc $task)
-  breqs=$(cat "$dsc" | sed -n "s/Build-Depends:\(.*\)/\1/p" | tr ', ' ' ')
-  breqs=$(echo "$breqs" | sed 's/=\s/=/g')
-  breqs=$(echo "$breqs" | sed 's/\(\w*\)\(\s(\([0-9=\-\.\>]\+\))\)\+/\1~[\3]/g') #? like (>= 10.1)
-  breqs=$(echo "$breqs" | sed 's/\(\w*\)\(\s\[\([a-z\-]\+\)\]\)\+/\1~[\3]/g') #? like [linux-any]
-  breqs=$(echo "$breqs" | sed 's/\(\w*\)\(\s<\(\!nocheck\)>\)\+/\1~[\3]/g') #? like <!no-check>
-  if [ -d $BREQ_DIR/$task ]; then
-    info $task "clearing build-reqs ..."
-    rm -rf $BREQ_DIR/$task/*
-  else
-    info $task "creating build-reqs ..."
-    mkdir $BREQ_DIR/$task
-  fi
-  echo $breqs
-}
+. ${PROJ_DIR}/bin/log-lib # exit, warning, info
+. ${PROJ_DIR}/bin/tag-lib # tags functions
+. ${PROJ_DIR}/bin/docker-lib # helpers for docker
+. ${PROJ_DIR}/bin/task-lib # single task related
+. ${PROJ_DIR}/bin/build-lib # build a bunch of task
 
 # endregion
 
-# region #! build func
 
-# build task: build_task <task>
-build_task() {
-  local task bspec_list bname bver
-  task=$1
-  task_init $task
-  bspec_list="$(task_get_reqs $task)"
-  # fixme: to func
-  for bspec in $bspec_list; do
-    bname=$(get_name_from_bspec "$bspec")
-    bver=$(get_version_from_bspec "$bspec")
-    # top lever reqs
-    mkdir $BREQ_DIR/$task/$bname
-    [ -z $bver ] || echo "$bver" > $BREQ_DIR/$task/$bname/.toplevel_ver
-  done
-}
+# region #! main
+cd ${PROJ_DIR}
 
-# build all tasks: build_all_tasks
-build_all_tasks() {
-  for task in $(tasks); do
-    build_task $task
-  done
-}
+buildAll
 
+cd $SWD
 # endregion
-
-create_ghost_fhs
-
-build_all_tasks

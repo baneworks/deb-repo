@@ -1,0 +1,106 @@
+# region #! include
+
+. ./bin/bspec-lib
+
+# endregion
+
+# region #!task funcs
+
+# return task list from taskfile
+taskList() {
+  echo $(cat $TASK_FILE | tr "\n" ' ')
+}
+
+# make task dir: taskMakeDir <task>
+taskMakeDir() {
+  local srcdir bindir tmpdir
+  srcdir=$(tagValue "dsrc")"/$1"
+  bindir=$(tagValue "dbin")"/$1"
+  tmpdir=$(tagValue "tmp")"/$1"
+  dockerExec mkdir $srcdir
+  dockerExec mkdir $bindir
+  dockerExec mkdir $tmpdir
+}
+
+# purge all from task dir: taskClear <task>
+taskClear() {
+  local srcdir bindir tmpdir
+  srcdir=$(tagValue "dsrc")"/$1"
+  bindir=$(tagValue "dbin")"/$1"
+  tmpdir=$(tagValue "tmp")"/$1"
+  dockerExec rm -rf $srcdi
+  dockerExec rm -rf  $bindir
+  dockerExec rm -rf  $tmpdir
+}
+
+# prepare for task: taskInit <task>
+taskInit() {
+  local task
+  task="$1"
+  wdir=$(tagDir "dsrc")"/$1"
+  if [ -d $(guestCreateFHS "dbin" $task) ] ||
+     [ -d $(guestCreateFHS "dsrc" $task) ] ||
+     [ -d $(guestCreateFHS  "tmp" $task) ]
+  then
+    # info $task "=== in test mode ==="
+    taskClear $task # fixme: testing
+  fi
+  info $task "dirs ..."
+  taskMakeDir $task # fixme: testing
+  [[ -f "$BREQ_DIR/$task/.flatten" ]] && rm -f "$BREQ_DIR/$task/.flatten"
+  touch "$BREQ_DIR/$task/.flatten"
+  info $task "sources ..."
+  [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!" # fixme: testing
+}
+
+# get task dcs filename: taskDsc <task>
+taskDsc () {
+  local dsc=$(ls $(dockerRelativePath "dsrc" "$task/*.dsc"))
+  local task=$1
+  [ $(echo $dsc | wc -l) -eq 1 ] || error 1 NODSC "messed up with DSC file [$task]"
+  echo "$dsc"
+}
+
+# parse Build-Depends and return array: taskParseBR <br_string>
+taskParseBR() {
+  local str="$1"
+  str=$(tr -cd '[:print:]' <<< $str)
+
+  str=$(sed 's/ |/,/g' <<< $str) # fixme: alternate depends (x | y) not supported yet, installing both
+  str=${str//', '/'/'}
+  str=${str//' '/'&'}
+  str=$(sed 's/^\&//g' <<< "$str")
+  str=$(sed 's/\&$//g' <<< "$str")
+  str=$(sed 's/\([>=]\)\&/\1/g' <<< "$str")             #? like (>= 10.1)
+  str=$(sed 's/>>/>/g' <<< "$str") # fixme: is things like (>> 10.1) for? convert to (> 10.1)
+  str=$(sed 's/\&\(\[.*\]\)/\&(\1)/g' <<< "$str")       #? like [linux-any]
+  str=$(sed 's/\&\(<!nocheck>\)/\&(\1)/g' <<< "$str")   #? like <!no-check>
+  str=$(sed 's/\(:any\/\)/\//g' <<< "$str")             #? like :any
+
+  local bspecs
+  for s in ${str//'/'/ }; do
+    local n=$(sed 's/\(.*\)\s(\(.*\))/\1/g' <<<${s//'&'/ })
+    local v=$(sed -n 's/\(.*\)\s(\(.*\))/\2/gp' <<<${s//'&'/ })
+    bspecs+=("$n/$v")
+  done
+
+  echo "${bspecs[*]}"
+}
+
+# parse task dcs and return breqs array: taskReqs <task>
+taskReqs() {
+  local task=$1
+  local dsc=$(taskDsc $task)
+  local bspecs=($(taskParseBR "$(cat $dsc | sed -n 's/Build-Depends:\(.*\)/\1/p')"))
+
+  info $task "build-reqs ..."
+  if [ -d $BREQ_DIR/$task ]; then
+    rm -rf $BREQ_DIR/$task/*
+  else
+    mkdir $BREQ_DIR/$task
+  fi
+
+  echo "${bspecs[*]}"
+}
+
+# endregion

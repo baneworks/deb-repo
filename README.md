@@ -60,6 +60,80 @@ container and trying to build a package.
 
 2. Run `~/dev/deb-repo/make-repo` on the host and wait for the build to complete.
 
+# Results
+
+Results of `~/dev/deb-repo/make-repo` with **cyclic vetrex detection** is:
+
+```sh bash
+❯❯❯ make-repo
+[bash]: dirs ...
+[bash]: sources ...
+[bash]: build-reqs ...
+[bash autoconf]  ... [ OK ]
+[bash autoconf perl]  ... [ OK ]
+[bash autoconf perl perl-base]  ... [ !dep ] ... [ OK ]
+[bash autoconf m4]  ... [ OK ]
+[bash autoconf m4 libc6]  ... [ OK ]
+[bash autoconf m4 libc6 libgcc-s1]  ... [ OK ]
+[bash autoconf m4 libc6 libgcc-s1 gcc-10-base]  ... [ !dep ] ... [ OK ]
+[bash autoconf debianutils]  ... [ !dep ] ...
+[bash autotools-dev]  ... [ !dep ] ...
+[bash bison]  ... [ +m4 ] ... [ OK ]
+[bash bison libc6]  ... [ OK ]
+[bash bison libc6 libgcc-s1]  ... [ +gcc-10-base ] ...
+[bash libncurses5-dev]  ... [ OK ]
+[bash libncurses5-dev libtinfo6]  ... [ +libc6 ] ... [ OK ]
+[bash libncurses5-dev libncurses-dev]  ... [ +libtinfo6 ] ...
+[bash texinfo]  ... [ +libc6 ] ... [ +perl ] ... [ OK ]
+[bash texinfo perlapi-5.32.0]  ... [ !dep ] ... [ OK ]
+[bash texinfo libtext-unidecode-perl]  ... [ +perl ] ... [ OK ]
+[bash texinfo libxml-libxml-perl]  ... [ +perl ] ... [ OK ]
+[bash texinfo tex-common]  ... [ OK ]
+[bash texinfo tex-common ucf]  ... [ OK ]
+[bash texinfo tex-common ucf debconf]  ... [ !dep ] ...
+[bash texi2html]  ... [ +libtext-unidecode-perl ] ... [ OK ]
+[bash texi2html perl:any]  ... [ +perl-base ] ...
+[bash debhelper]  ... [ OK ]
+[bash debhelper autotools-dev]  ... [ !dep ] ... [ OK ]
+[bash debhelper dh-autoreconf]  ... [ OK ]
+[bash debhelper dh-autoreconf autoconf]  ... [ +perl ] ... [ OK ]
+[bash debhelper dh-strip-nondeterminism]  ... [ OK ]
+[bash debhelper dh-strip-nondeterminism libdebhelper-perl]  ... [ +perl:any ] ... [ OK ]
+[bash debhelper dpkg]  ... [ OK ]
+[bash debhelper dpkg tar]  ... [ !dep ] ... [ OK ]
+[bash debhelper dpkg-dev]  ... [ +perl ] ... [ OK ]
+[bash debhelper dwz]  ... [ +libc6 ] ... [ OK ]
+[bash debhelper file]  ... [ +libc6 ] ... [ OK ]
+[bash debhelper libdpkg-perl]  ... [ +perl ] ... [ OK ]
+[bash debhelper man-db]  ... [ OK ]
+[bash debhelper man-db bsdextrautils]  ... [ !dep ] ... [ OK ]
+[bash debhelper libdebhelper-perl]  ... [ +perl:any ] ... [ OK ]
+[bash debhelper po-debconf]  ... [ OK ]
+[bash debhelper po-debconf gettext]  ... [ +libc6 ] ... [ +perl:any ] ...
+[bash gettext]  ... [ +libc6 ] ... [ OK ]
+[bash gettext libgomp1]  ... [ +gcc-10-base ] ... [ OK ]
+[bash gettext libunistring2]  ... [ +libc6 ] ... [ OK ]
+[bash gettext libxml2]  ... [ +libc6 ] ... [ OK ]
+[bash gettext gettext-base]  ... [ +libc6 ] ... [ +dpkg ] ... [ OK ]
+[bash gettext install-info]  ... [ +libc6 ] ...
+[bash sharutils]  ... [ +libc6 ] ...
+[bash locales]  ... [ OK ]
+[bash locales libc-bin]  ... [ +libc6 ] ... [ OK ]
+[bash locales libc-l10n]  ... [ !dep ] ... [ +debconf ] ... [ OK ]
+[bash locales debconf-2.0]  ... [ !dep ] ...
+[bash time]  ... [ +libc6 ] ...
+[bash xz-utils]  ... [ +libc6 ] ... [ OK ]
+[bash xz-utils liblzma5]  ... [ +libc6 ] ...
+[bash dpkg-dev]  ... [ +perl ] ... [ +libdpkg-perl ] ... [ +tar ] ... [ OK ]
+[bash dpkg-dev bzip2]  ... [ OK ]
+[bash dpkg-dev bzip2 libbz2-1.0]  ... [ +libc6 ] ... [ OK ]
+[bash dpkg-dev xz-utils]  ... [ +libc6 ] ... [ OK ]
+[bash dpkg-dev patch]  ... [ +libc6 ] ... [ OK ]
+[bash dpkg-dev make]  ... [ +libc6 ] ... [ OK ]
+[bash dpkg-dev binutils]  ... [ OK ]
+[bash dpkg-dev binutils binutils-common]  ... [ !dep ] ...
+```
+
 # TODO
 
 # References

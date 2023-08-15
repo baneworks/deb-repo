@@ -1,0 +1,20 @@
+# region #!bspec funcs
+
+# return name part from bspec: bspecName <breq_spec>
+bspecName() {
+  local bname=(${1//'/'/ })
+  echo "${bname[0]}"
+}
+
+# return version part from bspec: bspecVersion <breq_spec>
+bspecVersion() {
+  local bver=(${1//'/'/ })
+  echo "${bver[1]}"
+}
+
+# return version in readabe form: bspecVersionHR <breq_spec>
+bspecVersionHR() {
+  local bver=(${1//'/'/ })
+  echo $(sed -n 's/\([>=]\+\)/\1 /pg' <<< "${bver[1]}")
+}
+# endregion

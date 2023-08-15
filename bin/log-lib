@@ -1,0 +1,38 @@
+# region #! globals
+
+COLOR_OFF='\033[0m'
+COLOR_RED='\033[0;31m'
+COLOR_GREEN='\033[0;32m'
+COLOR_YELLOW='\033[0;33m'
+
+# endregion
+
+# region #! functions
+
+error() {
+	local err tag msg
+	err="$1"
+	tag="$2"
+	msg="$3"
+	shift; shift; shift
+	(printf "${COLOR_RED}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
+	exit $err
+}
+
+warning() {
+  local tag msg
+	tag="$1"
+  msg="$2"
+  shift; shift
+	(printf "${COLOR_YELLOW}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
+}
+
+info() {
+  local tag msg
+	tag="$1"
+  msg="$2"
+  shift; shift
+	(printf "${COLOR_GREEN}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
+}
+
+# endregion

@@ -14,11 +14,19 @@ environment:
     ✔ add apt-sources @done(23-08-13 04:50)
   ✔ local fhs @done(23-08-01 20:25)
   ✔ guest fhs @done(23-08-02 00:42)
+  ☐ refactor repo
+    ☐ merge repo with vms
+    ☐ run docker in bg
+    ☐ script to stop container
+  ☐ multiarch support
+  ☐ fix debootstrap
 
 bash-builder:
   ✔ tasks @done(23-08-02 08:24)
     ✔ spec @done(23-08-02 08:24)
     ✔ build-reqs @done(23-08-02 08:24)
+    ✔ without circles detection @done(23-08-15 11:48)
+    ✔ with circles detection @done(23-08-15 11:48)
   ✔ dload @done(23-08-02 08:24)
   ☐ unpack
   ☐ patch

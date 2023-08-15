@@ -111,7 +111,7 @@
             /bin/sed -i "s/^root:x/root:/g" /etc/passwd
             /bin/sed -i "s/^root:\*:/root::/g" /etc/shadow
             #? net cfg
-            echo "nameserver 10.0.2.3" > cat /etc/resolv.conf
+            echo "nameserver 10.0.2.3" > /etc/resolv.conf
             # echo "85.143.112.112 deb.debian.org" #? russian mirror
             #? apt cfg
             echo "deb-src http://deb.debian.org/debian bullseye main" >> /etc/apt/sources.list
