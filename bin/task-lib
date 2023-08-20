@@ -62,7 +62,7 @@ taskDsc () {
 }
 
 # parse Build-Depends and return array: taskParseBR <br_string>
-taskParseBR() {
+taskParseBR() { # fixme: refactor taskParseBR
   local str="$1"
   str=$(tr -cd '[:print:]' <<< $str)
 
@@ -72,7 +72,8 @@ taskParseBR() {
   str=$(sed 's/^\&//g' <<< "$str")
   str=$(sed 's/\&$//g' <<< "$str")
   str=$(sed 's/\([>=]\)\&/\1/g' <<< "$str")             #? like (>= 10.1)
-  str=$(sed 's/>>/>/g' <<< "$str") # fixme: is things like (>> 10.1) for? convert to (> 10.1)
+  str=$(sed 's/>>/>/g' <<< "$str")                      #? convert things like (>> 10.1) (> 10.1)
+  str=$(sed 's/<<&/</g' <<< "$str")                     #? convert things like (<< 10.1) (< 10.1)
   str=$(sed 's/\&\(\[.*\]\)/\&(\1)/g' <<< "$str")       #? like [linux-any]
   str=$(sed 's/\&\(<!nocheck>\)/\&(\1)/g' <<< "$str")   #? like <!no-check>
   str=$(sed 's/\(:any\/\)/\//g' <<< "$str")             #? like :any

@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+# @file lib-build
+# @brief A library for generating build-depends for a task.
+
 # region #! globals
 
 #! constraints
@@ -11,6 +15,8 @@ BREQ_DIR="${PROJ_DIR}/.build-reqs"
 # region #! include
 
 . ./bin/bspec-lib
+. ./bin/debver-lib
+. ./bin/test-lib
 
 # endregion
 
@@ -34,6 +40,7 @@ breqUnpackString() {
 # unpack and call taskParseBR: breqParsePacked <string>
 breqParsePacked() {
   local unpacked=$(breqUnpackString "$1")
+  unpacked=$(sed 's/\(.*\)\:any$/\1/' <<< "$unpacked") # fixme: package:any hack
   local breqs=$(taskParseBR "$unpacked")
   echo "${breqs[*]}"
 }
@@ -42,238 +49,115 @@ breqParsePacked() {
 
 # region #! version funcs
 
-# utility for breqCompare: breqConditionOp <condition>
-breqConditionOp() {
-  local cond_op="$1"
-  cond_op=$(tr -cd '[:print:]' <<< "$cond_op")
-  cond_op=($cond_op)
-  local target="${cond_op[1]}"
-  cond_op="${cond_op[0]}"
-  echo "$cond_op"
-}
-
-# utility for breqCompare: breqConditionTarget <condition>
-breqConditionTarget() {
-  local cond_op="$1"
-  cond_op=$(tr -cd '[:print:]' <<< "$cond_op")
-  cond_op=($cond_op)
-  local target="${cond_op[1]}"
-  echo "$target"
-}
-
-# utility for breqCompare: breqIsGreater <condition> <version>
-breqIsGreater() {
-  local target=$(breqConditionTarget "$1")
-  local version="$2"
-
-  local res=""
-  local va=(${version//./ })
-  local ca=(${target//./ })
-
-  # compare the major ver
-  if [[ ${va[0]} -gt ${ca[0]} ]]; then
-    res="true"
-  else
-    # Compare the minor ver
-    if [[ ${va[1]} -gt ${ca[1]} ]]; then
-      res="true"
-    else
-      # Compare the patch ver
-      if [[ ${va[2]} -gt ${ca[2]} ]]; then
-        res="true"
-      fi
-    fi
-  fi
-  echo "$res"
-}
-
-# utility for breqCompare: breqIsGreaterOrEqual <condition> <version>
-breqIsGreaterOrEqual() {
-  local target=$(breqConditionTarget "$1")
-  local version="$2"
-
-  local res=""
-  local va=(${version//./ })
-  local ca=(${target//./ })
-
-  # compare the major ver
-  if [[ ${va[0]} -gt ${ca[0]} ]]; then
-    res="true"
-  else
-    # Compare the minor ver
-    if [[ ${va[1]} -gt ${ca[1]} ]]; then
-      res="true"
-    else
-      # Compare the patch ver
-      if [[ ${va[2]} -ge ${ca[2]} ]]; then
-        res="true"
-      fi
-    fi
-  fi
-  echo "$res"
-}
-
-# utility for breqCompare: breqIsEqual <condition> <version>
-breqIsEqual() {
-  local target=$(breqConditionTarget "$1")
-  local version="$2"
-  local res=""
-  [[ $target == $version ]] && res="true"
-  echo "$res"
-}
-
-# compares version with predicate: breqParsePacked <condition> <version>
-breqCompare() {
-  local cond="$1"
-  local ver="$2"
-
-  local cond_op=($cond)
-  local target=${cond_op[1]}
-  cond_op=${cond_op[0]}
-
-  case "$cond_op" in
-    '=' ) echo $(breqIsEqual "$cond" "$ver") ;;
-    '>' ) echo $(breqIsGreater "$cond" "$ver") ;;
-    '>=') echo $(breqIsGreaterOrEqual "$cond" "$ver") ;;
-    *)
-      error 1 "breqCompare" "unknown version condition"
-      return 1
-    ;;
-  esac
-}
-
 # check version reqs and return index of suitable: breqWhichVersion <cond> <@versions>
+# @description Function to find suitable package from available packages accroding dependency requrenment string.
+#
+# @example
+#    $(breqWhichVersion <req> <packages>)"
+#
+# @arg `req` requrenment string like ">= 2.4 2.31-13+deb11u6".
+# @arg packages array of available in [bspec](./lib-bspec) format.
+#
+# @stdout index of suitable package
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure.
 breqWhichVersion() {
   local cond="$1"
   shift
   local avail=($@)
 
-  local found=""
+  testAddToVersionSamples $cond $avail # generate version samples
+
   for ((idx=0; idx < ${#avail[@]}; ++idx)); do
-    local retval=$(breqCompare "$cond" "${avail[$idx]}")
-    if [[ "$retval" ]]; then
-      found="true"
-      break
-    fi
+    local matched=$(dverMatch "$cond" "${avail[$idx]}")
+    [[ -n "$matched" ]] && break
   done
 
-  [[ -z $found ]] && return -1
-
-  return "$idx"
+  if [[ -n $matched ]]; then
+    echo $idx
+    return 0
+  else
+    return 1
+  fi
 }
 
 # endregion
 
 # region #! node funcs
 
-# print node tag
-breqPrintMsg() {
-  local pth="$1"
-  pth=(${pth//'/'/ })
-  local len=${#pth[@]}
-  len+=-1
-  local head
-  head="${pth[@]:0:$len}"
-  local hd
-  for h in "${head[@]}"; do
-    hd+="$h "
-  done
-  last="${pth[-1]}"
-  (printf "\n${COLOR_OFF}[$hd${COLOR_GREEN}$last${COLOR_OFF}] $2") >&2
-}
+# region #! log funcs
 
-# print message
-breqPrintStatus() {
-  case "$1" in
-      'ok') (printf "[ ${COLOR_GREEN}$2${COLOR_OFF} ]") >&2 ;;
-   'nodep') (printf "[ ${COLOR_YELLOW}!dep${COLOR_OFF} ] ... ") >&2 ;;
-    'have') (printf "[ ${COLOR_YELLOW}+$2${COLOR_OFF} ] ... ") >&2 ;;
-    'note') (printf "[ ${COLOR_YELLOW}$2${COLOR_OFF} ]") >&2 ;;
-     'err') (printf "[ ${COLOR_RED}$2${COLOR_OFF} ]\n") >&2 ;;
-         *) (printf "[ ${COLOR_RED}$2${COLOR_OFF} ]\n") >&2 ;;
-  esac
-}
+# fixme: breqPrintMsg is ugly - rewrite
+# print node tag: breqPrintName <level> <@bnames> <message>"
+breqPrintName() {
+  local lvl="$1"
+  IFS="/" read -ra pth <<< "$2"
 
-#! root node is special case, because depends is taking form DSC rather apt-cache
-# create root breq node: breqAddRoot <task> <bspec>
-breqAddRoot() {
-  local task=$1 bspec=$2
-
-  local bname=$(bspecName $bspec)
-  local bver=$(bspecVersionHR $bspec)
-
-  local req_dir="$BREQ_DIR/$task/$bname"
-
-  [[ -d "$req_dir" ]] || mkdir "$req_dir"
-  echo "$bname" > "$req_dir/.name"
-  echo "$bver" > "$req_dir/.version"
-  echo "$parent" > "$req_dir/.parent"
-
-  breqPrintMsg "$task/$bname" " ... "
-
-  local str="$(dockerAptCache "$bname")"
-
-  #? gathering depends
-  local dstr=$(breqPackString "$(sed -n 's/^Depends: \(.*\)$/\1/pg' <<< $str)")
-  local da
-  for line in ${dstr//"\n"/ }; do
-    line=$(tr -cd '[:print:]' <<< $line)
-    da+=($line)
-  done
-
-  if [[ ${#da[@]} -eq 0 ]]; then
-    breqPrintStatus "nodep"
+  if [[ $lvl -eq 1 ]]; then
+    (printf "${COLOR_OFF}{${pth[0]}${COLOR_GREEN} ${pth[1]}${COLOR_OFF}} $3") >&2
     return
   fi
 
-  #? avaible versions
-  local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$str")
-  local va
-  for line in ${vstr//"\n"/ }; do
-    line=$(tr -cd '[:print:]' <<< $line)
-    va+=($line)
+  local len=$(( ${#pth[@]} - 1))
+  local head="${pth[@]:0:$len}"
+  for h in ${pth[@]:0:$len}; do
+    head+="$h "
   done
+  last="${pth[-1]}"
+  (printf "${COLOR_OFF}{${COLOR_GREEN}$last${COLOR_OFF}} $3") >&2
 
-  #? which version is needed
-  if ! [[ -z $bver ]]; then
-    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then
-      local idx=$(breqWhichVersion "$bver" "${va[@]}")
-      [[ $idx -eq -1 ]] && breqPrintStatus "err" "!ver"
-    fi
-  fi
-
-  #? this is our set
-  local bdeps="${da[$idx]}"
-
-  #? dive in, god save our souls
-  for curset_packed in "${bdeps[@]}"; do
-    local pa=($task $bname)
-    local curset=$(breqParsePacked $curset_packed)
-    for bi in ${curset[@]} ; do
-      local seen_before=$(grep -Fxc "$(bspecName $bi)" "$BREQ_DIR/$task/.flatten")
-      if [[ seen_before -gt 0 ]]; then
-        breqPrintStatus "have" "$(bspecName $bi)"
-      else
-        breqPrintStatus "ok" "OK"
-        echo $(bspecName $bi) >> "$BREQ_DIR/$task/.flatten"
-        breqAddNode "$task" "$bi" "${pa[@]}"
-      fi
-    done
-  done
+  return
 }
 
-# create root breq node: breqAddNode <task> <bspec> <@parents>
+# print status message: breqPrintStatus <level> <status> <message>
+breqPrintStatus() {
+  local lvl=$1
+  shift
+  local tail
+  [[ $lvl -eq 1 ]] && nl="\n"
+  case "$1" in
+       'ok') [[ $lvl -eq 1 ]] && (printf "[${COLOR_GREEN}OK${COLOR_OFF}]$nl") >&2 || (printf "") >&2 ;;
+    'nodep') (printf "[${COLOR_YELLOW}!dep${COLOR_OFF}] ") >&2 ;;
+     'have') (printf "[${COLOR_YELLOW}+$2${COLOR_OFF}] ") >&2 ;;
+     'note') (printf "[${COLOR_YELLOW}$2${COLOR_OFF}]$nl") >&2 ;;
+      'err') (printf "[${COLOR_RED}$2${COLOR_OFF}]$nl") >&2 ;;
+          *) (printf "[${COLOR_RED}$1:$2${COLOR_OFF}]$nl") >&2 ;;
+  esac
+}
+
+# endregion
+
+# region #! node funcs
+
+# @description Function to add node to build-depens tree. Reqursive.
+#
+# @example
+#    $(breqAddNode <level> <bspec> <@parents>)"
+#
+# @arg level numeric target level of build-depens tree.
+# @arg bspec build-dependency in `bspec` format.
+# @arg parents parents array of build-dependency upto root node.
+#
+# @stdout last processed (failed) package in bspec format (@see bspec).
+#
+# @exitcode 0 on success.
+# @exitcode 1 on failure.
+#
+# @see bspec
 breqAddNode() {
-  local task="$1" bspec="$2"
+  local level=$(( $1 + 1 ))
+  local bspec="$2"
   shift; shift
-  local pa=($@)
-  local parent="${pa[-1]}"
 
   local bname=$(bspecName $bspec)
   local bver=$(bspecVersionHR $bspec)
 
-  local pinfo
-  local req_dir="$BREQ_DIR"
+  local pa=($@) #? parents array
+  local parent="${pa[-1]}" #? prev node
+  local pinfo #? parents str separated by "/"
+  local req_dir="$BREQ_DIR" #? path to store node info
+
   for p in "${pa[@]}"; do
     pinfo+="/$p"
     req_dir+="/$p"
@@ -286,7 +170,7 @@ breqAddNode() {
   echo "$bver" > "$req_dir/.version"
   echo "$parent" > "$req_dir/.parent"
 
-  breqPrintMsg "$pinfo/$bname" " ... "
+  breqPrintName $level "$pinfo/$bname"
 
   local str="$(dockerAptCache "$bname")"
 
@@ -299,8 +183,11 @@ breqAddNode() {
   done
 
   if [[ ${#da[@]} -eq 0 ]]; then
-    breqPrintStatus "nodep"
-    return
+    breqPrintStatus $level "nodep"
+    [[ $level -eq 1 ]] && breqPrintStatus $level "ok" #? nodeps is ok - inform caller
+    #? nodeps is ok - inform caller
+    echo "$bspec"
+    return 0
   fi
 
   #? avaible versions
@@ -312,10 +199,15 @@ breqAddNode() {
   done
 
   #? which version is needed
-  if ! [[ -z $bver ]] && [[ $bane != "dh-autoreconf" ]]; then
-    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then
-      local idx=$(breqWhichVersion "$bver" "${va[@]}")
-      [[ $idx -eq -1 ]] && breqPrintStatus "err" "!ver"
+  local idx=0
+  if [[ -n $bver ]] && [[ $bname != "dh-autoreconf" ]]; then # fixme: dh-autoreconf breaks all
+    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then # fixme: add propper parsing for: <!nocheck> [linux-any]
+      idx=$(breqWhichVersion "$bver" "${va[@]}")
+      if [[ $? -gt 0 ]]; then #! nover isn't good - lets caller decide
+        breqPrintStatus $level "err" "!ver"
+        echo "$bspec"
+        return 1
+      fi
     fi
   fi
 
@@ -323,23 +215,32 @@ breqAddNode() {
   local bdeps="${da[$idx]}"
 
   #? dive in, god save our souls
+  local retcode last_package
   for curset_packed in "${bdeps[@]}"; do
     pa+=("$bname")
     local curset=$(breqParsePacked $curset_packed)
     for bi in ${curset[@]} ; do
       local seen_before=$(grep -Fxc "$(bspecName $bi)" "$BREQ_DIR/$task/.flatten")
       if [[ seen_before -gt 0 ]]; then
-        breqPrintStatus "have" "$(bspecName $bi)"
-        break
+        breqPrintStatus $level "have" "$(bspecName $bi)"
       else
-        breqPrintStatus "ok" "OK"
-        breqAddNode "$task" "$bi" "${pa[@]}"
         echo $(bspecName $bi) >> "$BREQ_DIR/$task/.flatten"
-        break
+        echo -n '-> ' >&2 #? dive deep
+        last_package=$(breqAddNode $level "$bi" "${pa[@]}")
+        retcode=$?
+        if [[ $retcode -gt 0 ]]; then
+          [[ $level -eq 1 ]] && breqPrintStatus $level "err" "!fail"  # fixme: on top level
+          echo "$last_package"
+          return $retcode #? bash specific: return just exit for, but assuming normal return for readability
+        fi
       fi
-    breqPrintStatus "ok" "OK"
     done
   done
+
+  [[ $level -eq 1 ]] && [[ $retcode -eq 0 ]] && breqPrintStatus $level "ok"
+
+  echo "$last_package"
+  return $retcode
 }
 
 # endregion
@@ -358,8 +259,13 @@ buildTask() {
   local task=$1 bspecs
   taskInit $task
   bspecs=$(taskReqs $task)
+
+  local retcode last_package
   for bs in ${bspecs[@]}; do
-    breqAddRoot "$task" "$bs"
+    # last_package=$(breqAddRoot "$task" "$bs")
+    last_package=$(breqAddNode 0 "$bs" "$task")
+    retcode=$?
+    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $last_package"
     # break # fixme: test
   done
 }

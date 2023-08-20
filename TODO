@@ -10,8 +10,12 @@ environment:
     ✔ instal @done(23-07-30 02:30)
     ✘ is working @cancelled(23-08-01 17:53)
       ✘ fix fakechroot issues @cancelled(23-08-01 17:53)
-  ✔ prepare nix develop shell @done(23-07-31 01:41)
+  ☐ prepare nix develop shell
+    ✔ container generation @done(23-07-31 01:41)
     ✔ add apt-sources @done(23-08-13 04:50)
+    ☐ shell for make-repo
+      ☐ autodocs (https://github.com/reconquest/shdoc)
+      ☐ tests (https://github.com/reconquest/tests.sh)
   ✔ local fhs @done(23-08-01 20:25)
   ✔ guest fhs @done(23-08-02 00:42)
   ☐ refactor repo
@@ -28,10 +32,29 @@ bash-builder:
     ✔ without circles detection @done(23-08-15 11:48)
     ✔ with circles detection @done(23-08-15 11:48)
   ✔ dload @done(23-08-02 08:24)
+  ✔ refactor addNode @done(23-08-20 19:58)
+  ✔ version parse @done(23-08-21 05:51)
+  ☐ support '|' depends
+  ☐ depends
+    ☐ return
+    ☐ install
   ☐ unpack
   ☐ patch
   ☐ build
   ☐ pack
+  ☐ document
+    ☐ bspec-lib
+    ☐ build-lib
+    ☐ docker-lib
+    ☐ log-lib
+    ☐ make-repo
+    ☐ tag-lib
+    ☐ task-lib
+    ☐ test-lib
+    ☐ generate
+  ☐ tests
+    ☐ write
+    ☐ call stack
 
 python-builder:
   ✘ features @cancelled(23-08-02 06:01)

@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+samples=".tests/.versamples"
+mapfile -t lines < "$samples"
+declare -a ca ta va
+regexp='s/^\([\<\>=]\+\)\s\(.*\)\s\(.*\)$'
+for line in "${lines[@]}"; do
+  ca+=($(echo $line | sed -n "$regexp/\1/p"))
+  ta+=($(echo $line | sed -n "$regexp/\2/p"))
+  va+=($(echo $line | sed -n "$regexp/\3/p"))
+done
+
+[[ ${#ca[@]} -eq ${#ta[@]} ]] && [[ ${#ca[@]} -eq ${#va[@]} ]] || echo "index error!"
+
+compareVersions() {
+  local tstr="$1" vstr="$2"
+
+  # peace of cake
+  if [[ $tstr == $vstr ]]; then
+    echo "="
+    return 0
+  fi
+
+  #? ---- epoch ----
+  local regexp='s/^\([0-9]\+\):\(.*\)$'
+  local t_epoch=$(sed -n "$regexp/\1/1p" <<< $tstr)
+  local v_epoch=$(sed -n "$regexp/\1/1p" <<< $vstr)
+  [[ -z $t_epoch ]] && t_epoch=0
+  [[ -z $v_epoch ]] && v_epoch=0
+  if ! [[ $t_epoch -eq $v_epoch ]]; then
+    [[ $t_epoch -gt $v_epoch ]] && echo ">"
+    [[ $t_epoch -lt $v_epoch ]] && echo "<"
+  fi
+  ! [[ $t_epoch -eq 0 ]] && tstr=$(sed -n "$regexp/\2/p" <<< $tstr)
+  ! [[ $v_epoch -eq 0 ]] && vstr=$(sed -n "$regexp/\2/p" <<< $vstr)
+
+  regexp='s/^\(.*\)-\(.*\)$'
+  local t_debian=$(sed -n "$regexp/\2/1p" <<< $tstr)
+  local v_debian=$(sed -n "$regexp/\2/1p" <<< $vstr)
+  local t_upstream v_upstream
+  if [[ -z "$t_debian" ]]; then
+    t_upstream="$tstr"
+  else
+    t_upstream=$(sed -n "$regexp/\1/1p" <<< $tstr)
+  fi
+  if [[ -z $v_debian ]]; then
+    v_upstream=$vstr
+  else
+    v_upstream=$(sed -n "$regexp/\1/1p" <<< $vstr)
+  fi
+
+  local ret=0
+  local res=""
+  local parts=2
+
+  while [[ $parts -gt 0 ]]; do
+
+    case $parts in
+      '2') local tstr_part=$t_upstream; local vstr_part=$v_upstream ;;
+      '1') local tstr_part=$t_debian; local vstr_part=$v_debian ;;
+        *) break;;
+    esac
+
+    local i=0
+    while [[ -n $tstr_part || -n $vstr_part ]]; do
+      #? non digit part
+      regexp='s/^\([^0-9]\+\)\([0-9].*\)\?$'
+      local t_chars=$(sed -n "$regexp/\1/1p" <<< $tstr_part)
+      local v_chars=$(sed -n "$regexp/\1/1p" <<< $vstr_part)
+      if ! [[ $t_chars == $v_chars ]]; then
+        [[ $t_chars > $v_chars ]] && res=">"
+        [[ $t_chars < $v_chars ]] && res="<"
+        echo "$res"
+        return $ret
+      fi
+      [[ -n $t_chars ]] && tstr_part=$(sed -n "$regexp/\2/1p" <<< $tstr_part)
+      [[ -n $v_chars ]] && vstr_part=$(sed -n "$regexp/\2/1p" <<< $vstr_part)
+
+      #? digit part
+      regexp='s/^\([0-9]\+\)\([^0-9].*\)\?$'
+      local t_num=$(sed -n "$regexp/\1/1p" <<< $tstr_part)
+      local v_num=$(sed -n "$regexp/\1/1p" <<< $vstr_part)
+      if ! [[ $t_num -eq $v_num ]]; then
+        [[ $t_num -gt $v_num ]] && res=">"
+        [[ $t_num -lt $v_num ]] && res="<"
+        echo "$res"
+        return $ret
+      fi
+      [[ -n $t_num ]] && tstr_part=$(sed -n "$regexp/\2/1p" <<< $tstr_part)
+      [[ -n $v_num ]] && vstr_part=$(sed -n "$regexp/\2/1p" <<< $vstr_part)
+
+      i=$(( i + 1 ))
+    done
+
+    parts=$(( $parts - 1 ))
+
+  done
+
+  [[ -z $res ]] && ret=1
+  echo "$res"
+  return $ret
+}
+
+for (( i = 0; i < ${#ca[@]}; i++ )); do
+  res=$(compareVersions "${ta[i]}" "${va[i]}")
+  if [[ $? -gt 0 ]]; then
+    echo "error"
+    exit $?
+  fi
+
+  case "${ca[i]}" in
+    '>') [[ $res == '>' ]] && match="1" ;;
+    '>=') [[ $res == '>' || $res == '=' ]] && match="1" ;;
+    '=') [[ $res == '=' ]] && match="1" ;;
+    '<=') [[ $res == '<' || $res == '=' ]] && match="1" ;;
+    '<')  [[ $res == '<' ]] && match="1" ;;
+    '>>') [[ $res == '>' ]] && match="1" ;;
+    '<<') [[ $res == '<' ]] && match="1" ;;
+      *) echo "????? res: $res"; exit 1 ;;
+  esac
+
+  if [[ -n match ]]; then
+    echo "/match/ ${va[i]} ${ca[i]} ${ta[i]}"
+  else
+    echo "!fail! ${va[i]} ${ca[i]} ${ta[i]}"
+  fi
+
+done
