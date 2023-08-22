@@ -79,79 +79,30 @@ Results of `~/dev/deb-repo/make-repo` with **cyclic vetrex detection** is:
         ->{libc6}
           ->{libgcc-s1}
             ->{gcc-10-base} [!dep]
-            ->[+libc6]
+            ->{libc6} [cyclic]
           ->{libcrypt1}
-            ->[+libc6]
-      ->[+libc6]
-      ->[+libcrypt1]
+            ->{libc6} [cyclic]
+      ->{libc6} [+libc6]
+      ->{libcrypt1} [+libcrypt1]
       ->{libdb5.3}
-        ->[+libc6]
+        ->{libc6} [+libc6]
       ->{libgdbm-compat4}
-        ->[+libc6]
+        ->{libc6} [+libc6]
         ->{libgdbm6}
-          ->[+libc6]
-      ->[+libgdbm6]
+          ->{libc6} [+libc6]
+      ->{libgdbm6} [+libgdbm6]
       ->{zlib1g}
-        ->[+libc6]
-      ->[+perl-modules-5.32]
+        ->{libc6} [+libc6]
+      ->{perl-modules-5.32} [+perl-modules-5.32]
   ->{m4}
-    ->[+libc6]
+    ->{libc6} [+libc6]
     ->{libsigsegv2}
-      ->[+libc6]
+      ->{libc6} [+libc6]
   ->{debianutils} [!dep]
 {bash autotools-dev} [!dep]
 {bash bison}
-  ->[+m4]
-  ->[+libc6]
-{bash libncurses5-dev}
-  ->{libtinfo6}
-    ->[+libc6]
-  ->{libncurses-dev}
-    ->[+libtinfo6]
-    ->{libncurses6}
-      ->[+libtinfo6]
-      ->[+libc6]
-    ->{libncursesw6}
-      ->[+libtinfo6]
-      ->[+libc6]
-    ->{libc6-dev}
-      ->[+libc6]
-      ->{libc-dev-bin}
-        ->[+libc6]
-        ->[+libc6]
-      ->{linux-libc-dev} [!dep]
-      ->{libcrypt-dev}
-        ->[+libcrypt1]
-      ->{libnsl-dev}
-        ->{libnsl2}
-          ->[+libc6]
-          ->{libtirpc3}
-            ->[+libc6]
-            ->{libgssapi-krb5-2}
-              ->[+libc6]
-              ->{libcom-err2}
-                ->[+libc6]
-              ->{libk5crypto3}
-                ->[+libc6]
-                ->{libkrb5support0}
-                  ->[+libc6]
-              ->{libkrb5-3}
-                ->[+libc6]
-                ->[+libcom-err2]
-                ->[+libk5crypto3]
-                ->{libkeyutils1}
-                  ->[+libc6]
-                ->[+libkrb5support0]
-                ->{libssl1.1}
-                  ->[+libc6]
-                  ->{debconf} [!dep]
-                  ->{debconf-2.0} [!dep]
-              ->[+libkrb5support0]
-            ->{libtirpc-common} [!dep]
-        ->{libtirpc-dev}
-          ->[+libtirpc3]
-    ->[+libc-dev]
-    ->{ncurses-bin} [!dep]
+  ->{m4} [+m4]
+  ->{libc6} [+libc6]
 ```
 
 # TODO

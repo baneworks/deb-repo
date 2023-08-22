@@ -8,7 +8,7 @@
 BREQ_MAX_DEPTH=17
 
 #! build-reqs dir
-BREQ_DIR="${PROJ_DIR}/.build-reqs"
+BREQ_DIR="${PROJ_DIR}/.build-reqs" # fixme: ugly realisation of BTREE
 
 # endregion
 
@@ -117,10 +117,11 @@ breqPrintStatus() {
   [[ $lvl -eq 1 ]] && nl="\n"
   case "$1" in
        'ok') [[ $lvl -eq 1 ]] && (printf " [${COLOR_GREEN}OK${COLOR_OFF}]$nl") >&2 || (printf "") >&2 ;;
-    'nodep') (printf "[${COLOR_YELLOW}!dep${COLOR_OFF}]") >&2 ;;
-     'have') (printf "[${COLOR_YELLOW}+$2${COLOR_OFF}]") >&2 ;;
-     'note') (printf "[${COLOR_YELLOW}$2${COLOR_OFF}]$nl") >&2 ;;
-      'err') (printf "[${COLOR_RED}$2${COLOR_OFF}]$nl") >&2 ;;
+    'nodep') (printf "[${COLOR_YELLOW}!dep${COLOR_OFF}] ") >&2 ;;
+     'have') (printf "[${COLOR_YELLOW}+$2${COLOR_OFF}] ") >&2 ;;
+     'note') (printf "[${COLOR_YELLOW}$2${COLOR_OFF}] ") >&2 ;;
+     'warn') (printf "[${COLOR_RED}$2${COLOR_OFF}] ") >&2 ;;
+      'err') (printf "[${COLOR_RED}$2${COLOR_OFF}]\n") >&2 ;;
           *) (printf "[${COLOR_RED}$1:$2${COLOR_OFF}]$nl") >&2 ;;
   esac
 }
@@ -134,7 +135,6 @@ breqSeenBefore() {
   local bspec="$1"
   local bname=$(bspecName "$bspec")
   local bver=$(bspecVersionHR "$bspec")
-  # echo "---/breqSeenBefore/---" >&2
   mapfile -t lines < "$BREQ_DIR/$task/.flatten"
   for line in "${lines[@]}"; do
     line=$(sed 's/^\([0-9]\+\s\+\)\(.*\)$/\2/' <<< "$line")
@@ -142,16 +142,12 @@ breqSeenBefore() {
     for provided_bs in ${la[@]}; do
       local provided_bn=$(bspecName "$provided_bs")
       local provided_bv=$(bspecVersion "$provided_bs")
-      # echo "bname: $bname, bver: $bver, pname: $provided_bn, pver: $provided_bv" >&2
       if [[ "$bname" == "$provided_bn" ]]; then
-        # echo "dverMatch bname: $bname/$bver $provided_bn/$provided_bv" >&2
         if [[ -z $bver ]]; then
-          # echo "!match!" >&2
           echo "true"
           return 0
         fi
         if [[ -n $(dverMatch "$bver" "$provided_bv") ]]; then
-          # echo "!match!" >&2
           echo "true"
           return 0
         else
@@ -171,63 +167,137 @@ breqRepStr() {
   echo "${res}$4"
 }
 
+# fixme: выкинь - не позорься
+# $1 - xoff (x offset), $2 - yoff (lines)
+breqArrowToUpper() {
+  tput sc
+  tput cuf $(( $1 + 40 )) # move the cursor right
+  echo -ne "---+" >&2
+  for ((y=1; y < $2; ++y)); do
+    tput cuu 1 # cursor up
+    echo -ne "|" >&2
+  done
+  echo -ne "<----+" >&2
+  tput rc # restore cursor
+}
+
 # @description Function to add node to build-depens tree. Reqursive.
 #
 # @example
-#    $(breqAddNode <level> <bspec> <@parents>)"
+#    $(breqAddNode <level> <bspec> <retcode> <retvalue> <@parents>)"
 #
 # @arg level numeric target level of build-depens tree.
 # @arg bspec build-dependency in `bspec` format.
+# @arg retcode result code of pervious execution.
+# @arg retvalue result value of pervious execution.
+#      If cyclic dependency detected contains name of cyclic-dependecy,
+#      in other cases contains last processed dependency.
 # @arg parents parents array of build-dependency upto root node.
 #
 # @stdout last processed (failed) package in bspec format (@see bspec).
 #
-# @exitcode 0 on success.
-# @exitcode 1 on failure.
+# @exitcode code from previous execution on success.
+# @exitcode 1 on general failure.
+# @exitcode 2 if cyclic dependies detected.
 #
 # @see bspec
 breqAddNode() {
   local level=$(( $1 + 1 ))
   local bspec="$2"
-  shift; shift
+  local retcode="$3"
+  local retvalue="$4"
+  shift; shift; shift; shift
 
   local bname=$(bspecName $bspec)
   local bver=$(bspecVersionHR $bspec)
 
-  local pa=($@) #* parents array
-  local parent="${pa[-1]}" #* prev node
-  local pinfo #* parents str separated by "/"
-  local req_dir="$BREQ_DIR" #* path to store node info
+  #? ---- init ----
+  local pa=($@) # parents array
+  local parent="${pa[-1]}" # prev node
+  local pinfo # parents str separated by "/"
+  local req_dir="$BREQ_DIR" # path to store node info
+  local is_cyclic cyclic_dir cyclic_parent
 
+  local prev_idx=-1
   for p in "${pa[@]}"; do
     pinfo+="/$p"
     req_dir+="/$p"
+    prev_idx=$(( $prev_idx + 1 ))
+    #* if bname in parents, trigger cycle checks
+    if [[ "$p" == "$bname" ]]; then
+      is_cyclic="true"
+      cyclic_dir="$req_dir"
+      if [[ $prev_idx -ge 0 ]]; then # store cyclic parent
+        cyclic_parent=${pa[$prev_idx]}
+      else #! cyclic source is task themself - giving up
+        breqPrintStatus $level "err" "unbreakable circle"
+        echo "$bspec"
+        return 1
+      fi
+    fi
   done
+
   req_dir+="/$bname"
   pinfo="${pinfo:1}"
+
+  breqPrintName $level "$pinfo/$bname"
 
   [[ -d "$req_dir" ]] || mkdir "$req_dir"
   echo "$bname" > "$req_dir/.name"
   echo "$bver" > "$req_dir/.version"
   echo "$parent" > "$req_dir/.parent"
+  #? ---- /init ----
 
-  breqPrintName $level "$pinfo/$bname"
+  # echo -n "parent= $parent bspec=$bspec is_cyclic=$is_cyclic " >&2 # fixme: test
 
-  local str="$(dockerAptCache "$bname")"
+  #? ---- cyclic depend ----
+  if [[ -n $is_cyclic ]]; then # yep, cyclic dependecy
+    local cycled_bspec="$bname/`cat $cyclic_dir/.version | tr -d ' '`"
+    # mark nodes
+    echo "$parent $bspec" > "$cyclic_dir/.cyclic"
+    echo "$cycled_bspec" > "$req_dir/.cyclic"
+
+    breqPrintStatus $level "warn" "cyclic";
+
+    if [[ "$cycled_bspec" == "$bspec" ]]; then # node of cycle may be with diff version req
+
+      # echo -n "cycled_bspec=$cycled_bspec " >&2 # fixme: test
+
+      #* package may depend on other version, can we solve?
+      # todo: write version compatibily checks, for now only warn
+      breqPrintStatus $level "warn" "version";
+    fi
+    echo "$bspec"
+    return 2 # as we processed cyclic and no go deeper - unset return code
+  fi
+  #? ---- /cyclic ----
+
+  # todo: as follows broke full tree search - make variant of addNode for full tree traverse
+  #? ---- seen_before ----
+  local is_seen=$(breqSeenBefore "$bspec")
+  if [[ -n $is_seen ]]; then
+    breqPrintStatus $level "have" "$bname"
+    echo "$retvalue"
+    return $retcode
+  fi
+  #? ---- /seen ----
 
   #? ---- gathering depends ----
+  local str="$(dockerAptCache "$bname")"
   local dstr=$(breqPackString "$(sed -n 's/^Depends: \(.*\)$/\1/pg' <<< $str)")
+
   local da
   for line in ${dstr//"\n"/ }; do
     line=$(tr -cd '[:print:]' <<< "$line")
     da+=($line)
   done
 
-  #* nodeps is ok - inform caller
+  #* nodeps is ok - check for cyclic we done earlier
   if [[ ${#da[@]} -eq 0 ]]; then
     breqPrintStatus $level "nodep"
-    echo "$bspec"
-    return 0
+    # as this isn't error - keep retcode & retvalue unchanged
+    echo "$retvalue"
+    return $retcode
   fi
   #? ---- /depends ----
 
@@ -248,6 +318,7 @@ breqAddNode() {
       #! nover isn't good - lets caller decide
       if [[ $? -gt 0 ]]; then
         breqPrintStatus $level "err" "!ver"
+        #* general error - mutating retcode & retvalue to this dependency
         echo "$bspec"
         return 1
       fi
@@ -270,35 +341,51 @@ breqAddNode() {
   local provides="${prov_a[$idx]}"
   provides=$(breqParsePacked "${provides[@]}")
   provides=$(sed 's/\/=/\//g' <<< "$provides") # remove = from provides
-  echo "$level $bspec $provides" >> "$BREQ_DIR/$task/.flatten" # todo: cover tests this
+  echo "$level $bspec $provides" >> "$BREQ_DIR/$task/.flatten" # todo: cover with tests
   echo "$provides" > "$req_dir/.provides" # save depend's provides # fixme: not actualy needed
   #? ---- /provides ----
 
   #? ---- dive in, praise the buddha ----
-  local retcode last_package
   for curset_packed in "${bdeps[@]}"; do
     pa+=("$bname")
     local curset=$(breqParsePacked $curset_packed)
     for bi in ${curset[@]} ; do
       echo -ne $(breqRepStr "$level" "\n" "\t" '-> ') >&2
-      if [[ -n $(breqSeenBefore "$bi") ]]; then
-        breqPrintStatus $level "have" "$(bspecName $bi)"
-      else
-        #? dive deep
-        # echo -ne $(breqRepStr "$level" "\n" "\t" '-> ') >&2
-        last_package=$(breqAddNode $level "$bi" "${pa[@]}")
-        retcode=$?
-        if [[ $retcode -gt 0 ]]; then
-          [[ $level -eq 1 ]] && breqPrintStatus $level "err" "!fail"  # fixme: to top level
-          echo "$last_package"
-          return $retcode #? bash specific: return just exit for, but assuming normal return for readability
-        fi
-      fi
+      #* dive deeper
+      retvalue=$(breqAddNode $level "$bi" "$retcode" "$retvalue" "${pa[@]}")
+      retcode="$?" #* retcode must survive across call stack, except errors
+       # fixme: retval & retcode doesn't work as intended
+      # [[ $retcode -eq 2 && $retvalue == $bi ]] && breqPrintStatus $level "err" "cyclic"
+      [[ $retcode -eq 1 ]] && break;
+      # case $retcode in
+      #   0) retvalue="$bspec" ;;
+      #   2) breqPrintStatus $level "warn" "!cyclic";
+
+      #   *) break ;;
+      # esac
+
+      # if [[ $retcode -eq 1 ]]; then
+      # elif [[ $retcode -eq 2 ]]
+      #   breqPrintStatus $level "err" "!cyclic"
+      #   break
+      # fi
+      # #! general dependency processing error
+      # if [[ $retcode -eq 1 ]]; then
+      #   breqPrintStatus $level "err" "!fail"
+      #     #* on error we can mutate stdout results
+      #   retvalue="$last_package"
+      #   break
+      # fi
     done
   done
   #? ---- surfaced, thank god good ----
 
-  echo "$last_package"
+  if [[ $retcode -eq 0 ]]; then # fixme: retval & retcode doesn't work as intended
+    echo "$bspec"
+  else
+    echo "$retvalue"
+  fi
+
   return $retcode
 }
 
@@ -310,6 +397,7 @@ breqAddNode() {
 buildInit() {
   [[ -z $(dockerInit) ]] && return 1
   # info buildInit "=== test mode ==="
+  # fixme: ugly
   guestClearFHS # fixme: test
   guestCreateFHS # fixme: test
 }
@@ -322,11 +410,10 @@ buildTask() {
 
   local retcode last_package
   for bs in ${bspecs[@]}; do
-    # last_package=$(breqAddRoot "$task" "$bs")
-    last_package=$(breqAddNode 0 "$bs" "$task")
+    last_package=$(breqAddNode 0 "$bs" 0 "" "$task")
     retcode=$?
-    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $last_package"
-    echo "" #? instead [ OK ]
+    [[ $retcode -eq 1 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
+    echo "" # instead [ OK ]
     # break # fixme: test
   done
 }

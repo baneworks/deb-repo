@@ -1,10 +1,3 @@
-pre:
-  ✔ is nixos suitable to build? @done(23-07-30 02:30)
-    ✘ debootstrap @cancelled(23-08-01 17:51)
-    ✔ docker @done(23-08-01 17:52)
-  ✔ deb info @done(23-08-01 17:52)
-  ☐ python libs for debs
-
 environment:
   ✘ debootstrap @cancelled(23-08-01 17:53)
     ✔ instal @done(23-07-30 02:30)
@@ -23,74 +16,72 @@ environment:
     ☐ run docker in bg
     ☐ script to stop container
   ☐ multiarch support
-  ☐ fix debootstrap
+  ✘ fix debootstrap @cancelled(23-08-22 20:17)
 
 bash-builder:
-  ✔ tasks @done(23-08-02 08:24)
-    ✔ spec @done(23-08-02 08:24)
-    ✔ build-reqs @done(23-08-02 08:24)
-    ✔ without circles detection @done(23-08-15 11:48)
-    ✔ with circles detection @done(23-08-15 11:48)
-  ✔ dload @done(23-08-02 08:24)
-  ✔ refactor addNode @done(23-08-20 19:58)
-  ✔ version parse @done(23-08-21 05:51)
-  ☐ support '|' depends
-  ☐ support arch (libc6:amd64)
-  ☐ speedups
-    ☐ seenBefore
-    ☐ addNode
-    ☐ compareVersion
-  ✔ fix "dh-autoreconf" @done(23-08-21 07:45)
-  ☐ depends
-    ✔ flatten with version and provides @done(23-08-22 09:32)
-    ✔ seen_before rewrite @done(23-08-22 09:32)
-    ☐ reorder
-    ☐ install
-  ☐ unpack
-  ☐ patch
-  ☐ build
-  ☐ pack
-  ☐ document
-    ☐ bspec-lib
-    ☐ build-lib
-    ☐ docker-lib
-    ☐ log-lib
-    ☐ make-repo
-    ☐ tag-lib
-    ☐ task-lib
-    ☐ test-lib
-    ☐ generate
-  ☐ tests
-    ☐ write
-    ☐ call stack
+  ☐ features
+    ☐ main
+      ✔ dload src @done(23-08-02 08:24)
+      ✔ gather spec @done(23-08-02 08:24)
+      ✔ parse build-reqs @done(23-08-02 08:24)
+      ✔ version
+        ☐ parse @done(23-08-21 05:51)
+        ☐ interval maths
+      ☐ walk thru depends
+        ✔ flatten with version and provides @done(23-08-22 09:32)
+        ✔ without circles detection @done(23-08-15 11:48)
+        ✔ with circles detection @done(23-08-22 22:24)
+        ☐ with circles + version calc
+      ☐ binary depends
+        ☐ dload
+        ☐ install
+        ☐ clean
+      ☐ build
+        ☐ unpack
+          ☐ detect type of archive
+          ☐ install unpackers
+        ☐ patch
+        ☐ make
+        ☐ package
+      ☐ package builder tool
+      ☐ extra
+        ☐ tests
+          ☐ write
+          ☐ call stack
+        ☐ switch type of excution (local | docker)
+        ☐ different platforms (amd64, aarch64)
+        ☐ multiarch packages (libc6:amd64)
+        ☐ src-repo simulation
+          ☐ parse pr and autoapply labels
+          ☐ auto patch according labels
+          ☐ example branches
+            ☐ bugfix
+            ☐ release
+          ☐ example actions (may be - processing pr as patches)
+        ☐ out-repo simulation
+          ☐ stable builds
+          ☐ unstable builds
+    ☐ fixes
+      ☐ support '|' depends
+      ✔ fix "dh-autoreconf" @done(23-08-21 07:45)
+      ✔ refactor addNode @done(23-08-20 19:58)
+      ✔ seen_before rewrite @done(23-08-22 09:32)
+    ☐ document
+      ☐ bspec-lib
+      ☐ build-lib
+      ☐ docker-lib
+      ☐ log-lib
+      ☐ make-repo
+      ☐ tag-lib
+      ☐ task-lib
+      ☐ test-lib
+      ☐ generate
+      ☐ update github
+    ☐ speedups
+      ☐ drop apt-cache depends
+      ☐ seenBefore
+      ☐ addNode
+      ☐ compareVersion
 
 python-builder:
   ✘ features @cancelled(23-08-02 06:01)
-  ✘ arch @cancelled(23-08-02 06:01)
-  ✘ realisation @cancelled(23-08-02 06:01)
-
-builder-repo:
-  ✘ features @cancelled(23-08-02 06:01)
-  ✘ arch @cancelled(23-08-02 06:01)
-  ✘ actions @cancelled(23-08-02 06:01)
-
-src-repos:
-  ✘ fork @cancelled(23-08-02 06:02)
-  ✘ features @cancelled(23-08-02 06:02)
-    ✘ parse pr and autoapply labels @cancelled(23-08-02 06:02)
-    ✘ auto patch according labels @cancelled(23-08-02 06:02)
-    ✘ branches @cancelled(23-08-02 06:02)
-      ✘ bugfix @cancelled(23-08-02 06:02)
-      ✘ feature @cancelled(23-08-02 06:02)
-      ✘ release @cancelled(23-08-02 06:02)
-      ✘ freeze @cancelled(23-08-02 06:02)
-  ✘ actions @cancelled(23-08-02 06:02)
-    ✘ processing pr as patches @cancelled(23-08-02 06:02)
-
-out-repo:
-  ✘ stable builds @cancelled(23-08-02 06:02)
-  ✘ unstable builds @cancelled(23-08-02 06:02)
-  ✘ night builds @cancelled(23-08-02 06:02)
-  ✘ changelogs @cancelled(23-08-02 06:02)
-  ✘ changelog @cancelled(23-08-02 06:02)
-  ✘ archives @cancelled(23-08-02 06:02)

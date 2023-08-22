@@ -1,3 +1,5 @@
+# todo: rewrite & add abitilty to change working mode [docker | local]
+
 # region #! globals
 
 #! tags
@@ -5,6 +7,8 @@ TAG_SH="bin"
 TAG_DSRC="dsrc"
 TAG_DBIN="dbin"
 TAG_TMP="tmp"
+TAG_BTREE=".build-reqs"
+TAG_BTREE_DIR="$DC_REPO/$TAG_BTREE" #? "tmp" tag
 TAG_SH_DIR="$DC_REPO/$TAG_SH" #? "sh" tag
 TAG_DSRC_DIR="$DC_REPO/$TAG_DSRC" #? "dsrc" tag
 TAG_DBIN_DIR="$DC_REPO/$TAG_DBIN" #? "dbin" tag
@@ -22,7 +26,7 @@ TAG_TMP_DIR="$DC_REPO/$TAG_TMP" #? "tmp" tag
 
 # return tag list
 tagList() {
-  echo $($TAG_SH $TAG_DSRC $TAG_DBIN $TAG_TMP)
+  echo $($TAG_BTREE $TAG_SH $TAG_DSRC $TAG_DBIN $TAG_TMP)
 }
 
 # get tag value: tagValue <tag>
@@ -33,6 +37,7 @@ function tagValue() {
     dsrc) echo ${TAG_DSRC} ;;
     dbin) echo ${TAG_DBIN} ;;
     tmp) echo ${TAG_TMP} ;;
+    btree) echo ${TAG_BTREE} ;;
     *) error 1 BADTAG "unknown dir tag" ;;
   esac
 }
@@ -41,6 +46,7 @@ function tagValue() {
 function tagDir() {
   case "$1" in
     sh) echo ${TAG_SH_DIR} ;;
+    btree) echo ${TAG_BTREE_DIR} ;;
     dsrc) echo ${TAG_DSRC_DIR} ;;
     dbin) echo ${TAG_DBIN_DIR} ;;
     tmp) echo ${TAG_TMP_DIR} ;;

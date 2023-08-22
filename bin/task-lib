@@ -11,28 +11,31 @@ taskList() {
   echo $(cat $TASK_FILE | tr "\n" ' ')
 }
 
+# todo: rewrite & add abitilty to change working mode [docker | local]
 # make task dir: taskMakeDir <task>
-taskMakeDir() {
-  local srcdir bindir tmpdir
-  srcdir=$(tagValue "dsrc")"/$1"
-  bindir=$(tagValue "dbin")"/$1"
-  tmpdir=$(tagValue "tmp")"/$1"
-  dockerExec mkdir $srcdir
-  dockerExec mkdir $bindir
-  dockerExec mkdir $tmpdir
+taskMakeFHS() {
+  local btree=$(tagValue "btree")"/$1"
+  local bindir=$(tagValue "dbin")"/$1"
+  local srcdir=$(tagValue "dsrc")"/$1"
+  local tmpdir=$(tagValue "tmp")"/$1"
+  dockerExec mkdir {"$btree",$bindir,"$srcdir","$tmpdir"}
+  # [[ -d "$btree" ]] && rm -rf "$btree" # fixme: testing
+  mkdir -p "$btree" # fixme: a hack
 }
 
+# todo: rewrite & add abitilty to change working mode [docker | local]
 # purge all from task dir: taskClear <task>
-taskClear() {
-  local srcdir bindir tmpdir
-  srcdir=$(tagValue "dsrc")"/$1"
-  bindir=$(tagValue "dbin")"/$1"
-  tmpdir=$(tagValue "tmp")"/$1"
-  dockerExec rm -rf $srcdi
-  dockerExec rm -rf  $bindir
-  dockerExec rm -rf  $tmpdir
+taskClearFHS() {
+  local btree=$(tagValue "btree")"/$1"
+  local srcdir=$(tagValue "dsrc")"/$1"
+  local bindir=$(tagValue "dbin")"/$1"
+  local tmpdir=$(tagValue "tmp")"/$1"
+  # dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"} # fixme: test
+  dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
+  # [[ -d "$btree" ]] && rm -rf "$btree" # fixme: testing
 }
 
+# todo: refactor
 # prepare for task: taskInit <task>
 taskInit() {
   local task="$1"
@@ -43,10 +46,11 @@ taskInit() {
      [ -d $(guestCreateFHS  "tmp" $task) ]
   then
     # info $task "=== in test mode ==="
-    taskClear $task # fixme: testing
+    taskClearFHS $task # fixme: testing
   fi
+
   info $task "dirs ..."
-  taskMakeDir $task # fixme: testing
+  taskMakeFHS $task # fixme: testing
   [[ -f "$BREQ_DIR/$task/.flatten" ]] && rm -f "$BREQ_DIR/$task/.flatten"
   touch "$BREQ_DIR/$task/.flatten"
   info $task "sources ..."
@@ -91,10 +95,12 @@ taskParseBR() { # fixme: refactor taskParseBR
 # parse task dcs and return breqs array: taskReqs <task>
 taskReqs() {
   local task=$1
+
+  info $task "build-reqs ..."
+
   local dsc=$(taskDsc $task)
   local bspecs=($(taskParseBR "$(cat $dsc | sed -n 's/Build-Depends:\(.*\)/\1/p')"))
 
-  info $task "build-reqs ..."
   if [ -d $BREQ_DIR/$task ]; then
     rm -rf $BREQ_DIR/$task/*
   else

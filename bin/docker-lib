@@ -108,15 +108,17 @@ function guestClearFHS () {
   [[ -d $(dockerRelativePath "") ]] && dockerRmRepo
 }
 
+# fixme: ugly
 # create guest fhs
 function guestCreateFHS () {
-  local sh dbin dsrc tmp wdir
-  sh=$(dockerRelativePath "sh")
-  dbin=$(dockerRelativePath "dbin")
-  dsrc=$(dockerRelativePath "dsrc")
-  tmp=$(dockerRelativePath "tmp")
-  wdir=$(dockerRelativePath )
+  local wdir=$(dockerRelativePath )
+  local btree=$(dockerRelativePath "btree")
+  local sh=$(dockerRelativePath "sh")
+  local dbin=$(dockerRelativePath "dbin")
+  local dsrc=$(dockerRelativePath "dsrc")
+  local tmp=$(dockerRelativePath "tmp")
   [ ! -d $wdir ] && dockerMakeRepoDir
+  [ ! -d $btree ]   && dockerMakeDir $(tagValue "btree")
   [ ! -d $sh ]   && dockerMakeDir $(tagValue "sh")
   [ ! -d $dbin ] && dockerMakeDir $(tagValue "dbin")
   [ ! -d $dsrc ] && dockerMakeDir $(tagValue "dsrc")
