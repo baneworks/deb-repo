@@ -7,7 +7,7 @@
 # @description Function to compare two debian's version strings. Compares by left to right by single character.
 #
 # @example
-#    $(dverCmp <left_ver> <right_ver>)"
+#    $(dverCmp <left_ver> <right_ver>)
 #
 # @arg `left` left debian version string.
 # @arg `right` right debian version string.
@@ -114,7 +114,7 @@ dverCmp() {
 # @description Function to extract condition operator from depend requrenment string.
 #
 # @example
-#    $(dverCondition <req>)"
+#    $(dverCondition <req>)
 #
 # @arg `req` requrenment string like ">= 2.4 2.31-13+deb11u6".
 #
@@ -147,7 +147,7 @@ dverTarget() {
 # @description Function to apply depend requrenment string to package version.
 #
 # @example
-#    $(dverMatch <req> <version>)"
+#    $(dverMatch <req> <version>)
 #
 # @arg `req` requrenment string like ">= 2.4 2.31-13+deb11u6".
 # @arg `version` package version.
@@ -175,4 +175,109 @@ dverMatch() {
   esac
 
   echo "$match"
+}
+
+# todo: test cover
+# @description Function to compose two version's requirenment string.
+#   Conposition done in *non-extending* mode (e.g. result of
+#   composition of ">= 2.4" + ">= 2.5" will be ">= 2.5")
+#
+# @example
+#    $(dverCompose <left> <right>)
+#
+# @arg `left` requrenment string to compose with right (e.g. ">= 2.4").
+# @arg `right` requrenment string to compose (e.g. ">= 2.5").
+#
+# @stdout new composed version requirenment string on success.
+# @stdout "" real result of composition is empty (if exitcode = 0).
+#
+# @exitcode 0 on success composition (in this case )
+# @exitcode 1 on failure
+#
+# @see [version requrenment string](https://manpages.ubuntu.com/manpages/xenial/en/man5/deb-control.5.html)
+dverCompose() {
+  local l="$1" r="$2"
+  local lc=$(dverCondition "$l") rc=$(dverCondition "$r")
+  local lt=$(dverTarget "$l") rt=$(dverTarget "$r")
+  local res="false"
+
+  # fixme: implement '><' case
+  if [[ "${lc:0:1}" == '>' && "${rc:0:1}" == '<' ]]; then
+    echo ""
+    return 1
+  fi
+
+  #? [= & >] and [> & =] cases
+  if [[ "$lc" == '=' && "${rc:0:1}" == '>' ]] ||
+     [[ "${lc:0:1}" == '>' && "$rc" == '=' ]]
+  then
+    local cmp
+    # fixme: in dverCmp wrong op order
+    if [[ "${lc:0:1}" == '>' && "$rc" == '=' ]]; then  #? [> & =] variant
+      local tmp="$l"; l="$r"; r="$tmp"
+      lc=$(dverCondition "$l"); rc=$(dverCondition "$r")
+      lt=$(dverTarget "$l"); rt=$(dverTarget "$r")
+    fi
+    cmp=$(dverCmp "$rt" "$lt")
+    case $cmp in
+      '>') echo "= $lt" && return 0;;
+      '=') [[ "${rc:1:1}" == '=' ]] && echo "= $lt" && return 0 || echo "" && return 0 ;;
+      '<') echo "" && return 0 ;;
+        *) echo "" && return 1 ;;
+    esac
+  fi
+
+  #? [= & <] or [< & =] cases
+  if [[ "$lc" == '=' && "${rc:0:1}" == '<' ]] ||
+     [[ "${lc:0:1}" == '<' && "$rc" == '=' ]]
+  then
+    local cmp
+    # fixme: in dverCmp wrong op order
+    if [[ "${lc:0:1}" == '<' && "$rc" == '=' ]]; then  #? [< & =] variant
+      local tmp="$l"; l="$r"; r="$tmp"
+      lc=$(dverCondition "$l"); rc=$(dverCondition "$r")
+      lt=$(dverTarget "$l"); rt=$(dverTarget "$r")
+    fi
+    cmp=$(dverCmp "$rt" "$lt")
+    case $cmp in
+      '<') echo "= $lt" && return 0;;
+      '=') [[ "${rc:1:1}" == '=' ]] && echo "= $lt" || echo "" ; return 0 ;;
+      '<') echo "" && return 0 ;;
+        *) echo "" && return 1 ;;
+    esac
+  fi
+
+  #? = & = case
+  if [[ "$lc" == '=' && "$rc" == '=' ]]; then
+    if [[ $(dverCmp "$rt" "$lt") == '=' ]]; then
+      echo "$r" && return 0
+    else
+      echo "" && return 1
+    fi
+  fi
+
+  #? [> & >] or [< & <] cases
+  if [[ "${lc:0:1}" == '>' && "${rc:0:1}" == '>' ]] ||
+     [[ "${lc:0:1}" == '<' && "${rc:0:1}" == '<' ]]
+  then
+    # fixme: in dverCmp wrong op order
+    local cmp=$(dverCmp "$rt" "$lt")
+    if [[ "${lc:0:1}" == '<' && "${rc:0:1}" == '<' ]]; then  #? [< & <] variant
+      case $cmp in
+      '<') echo "$l" && return 0;;
+      '=') [[ "${lc:1:1}" == '=' ]] || echo "$r"; [[ "${rc:1:1}" == '=' ]] || echo "$l"; return 0;;
+      '>') echo "$r" && return 0 ;;
+        *) echo "" && return 1 ;;
+    esac
+    fi
+    case $cmp in
+      '>') echo "$l" && return 0;;
+      '=') [[ "${lc:1:1}" == '=' ]] || echo "$l"; [[ "${rc:1:1}" == '=' ]] || echo "$r"; return 0;;
+      '<') echo "$r" && return 0 ;;
+        *) echo "" && return 1 ;;
+    esac
+  fi
+
+  echo "$res"
+  return 1
 }

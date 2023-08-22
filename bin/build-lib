@@ -67,6 +67,7 @@ breqWhichVersion() {
   shift
   local avail=($@)
 
+  # fixme: temp test entry
   testAddToVersionSamples $cond $avail # generate version samples
 
   for ((idx=0; idx < ${#avail[@]}; ++idx)); do
@@ -210,6 +211,7 @@ breqAddNode() {
       cyclic_dir="$req_dir"
       if [[ $prev_idx -ge 0 ]]; then # store cyclic parent
         cyclic_parent=${pa[$prev_idx]}
+        # cyclic_parent="$p" # fixme: check for correct parent name
       else #! cyclic source is task themself - giving up
         breqPrintStatus $level "err" "unbreakable circle"
         echo "$bspec"  # pass current package upstack
@@ -231,15 +233,31 @@ breqAddNode() {
 
   #? ---- cyclic depend ----
   if [[ -n $is_cyclic ]]; then # yep, cyclic dependecy
-    local cycled_bspec="$bname/`cat $cyclic_dir/.version | tr -d ' '`"
+    local cycled_bver=$(cat $cyclic_dir/.version | tr -d ' ')
+    local cycled_bspec="$bname/${cycled_bver// /}"
     # mark nodes
-    echo "$parent $bspec" > "$cyclic_dir/.cyclic"
+    echo "$bspec" > "$cyclic_dir/.cyclic"
     echo "$cycled_bspec" > "$req_dir/.cyclic"
     breqPrintStatus $level "warn" "cyclic";
-    if [[ "$cycled_bspec" == "$bspec" ]]; then # node of cycle may be with diff version req
+    if [[ "$cycled_bspec" != "$bspec" ]]; then # node of cycle may be with diff version req
       #* package may depend on other version, can we solve?
       # todo: write version compatibily checks, for now only warn
-      breqPrintStatus $level "warn" "version";
+
+      local ver_rw
+      if [[ -n "$cycled_bver" || -n "$bver" ]]; then
+        ver_rw=$(dverCompose "$cycled_bver" "$(bspecVersionHR $bspec)")
+        local ver_code="$?"
+        testAddToVReqSamples "$cycled_bver" "$(bspecVersionHR $bspec)" "$ver_rw" "$ver_code" # fixme: test samples entry
+        if [[ "$ver_code" -gt 0 ]]; then #! cannot compose vreqs - giving up
+          breqPrintStatus $level "err" "version: \"${cycled_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\"";
+          echo "$bspec" # pass current package upstack
+          return 1 # cyclic themselfs isn't failure
+        fi
+      else
+        [[ -n "$cycled_bver" ]] && ver_rw="$cycled_bver" || ver_rw="$bver"
+      fi
+
+      breqPrintStatus $level "warn" "version: \"${cycled_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\"";
     fi
     echo "$bspec" # pass current package upstack
     return 0 # cyclic themselfs isn't failure

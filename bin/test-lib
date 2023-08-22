@@ -4,7 +4,8 @@
 
 #! test dir for asserts & samples
 TEST_DIR="${PROJ_DIR}/tests"
-TEST_VERSAMPLES="${TEST_DIR}/samples/version"
+TEST_V_SAMPLES="${TEST_DIR}/samples/version"
+TEST_VR_SAMPLES="${TEST_DIR}/samples/version-req"
 
 # endregion
 
@@ -25,8 +26,12 @@ testInit() {
     # [[ -d "$TEST_DIR" ]] && rm -r "$TEST_DIR"
     # mkdir "$TEST_DIR"
     if [[ $(isSamplesEnabled) ]]; then
-      [[ -f "$TEST_VERSAMPLES" ]] && rm -f "$TEST_VERSAMPLES"
-      touch "$TEST_VERSAMPLES"
+      [[ -f "$TEST_V_SAMPLES" ]] && rm -f "$TEST_V_SAMPLES"
+      touch "$TEST_V_SAMPLES"
+      [[ -f "$TEST_VR_SAMPLES" ]] && rm -f "$TEST_VR_SAMPLES"
+      touch "$TEST_VR_SAMPLES"
+      # fixme: pre-generated samples
+      cat "${TEST_VR_SAMPLES}-include" > "$TEST_VR_SAMPLES"
     fi
   fi
 }
@@ -51,8 +56,15 @@ testAddToVersionSamples() {
   [[ $(isSamplesEnabled) ]] || return
   local cond="$1"
   shift
-  echo "$cond" "$@" >> "$TEST_VERSAMPLES"
-  return
+  echo "$cond" "$@" >> "$TEST_V_SAMPLES"
+}
+
+# add to version samples: testAddToVersionSamples <vr1> <vr2> <vres> <vcode>
+testAddToVReqSamples() {
+  [[ $(isSamplesEnabled) ]] || return
+  local res="$1;$2;$3;$4"
+  res="${res// /'&'}"
+  echo "$res" >> "$TEST_VR_SAMPLES"
 }
 
 # endregion
