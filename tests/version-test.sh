@@ -2,14 +2,14 @@
 # @file tests for lib-debver
 # @brief A library for parsing and comparing debian version strings.
 
-. ./tests/vestion-test.sh
+. ./bin/test-lib
 . ./bin/debver-lib
 
 testVersionSamples() {
   local -a ca ta va
   local regexp='s/^\([\<\>=]\+\)\s\(.*\)\s\(.*\)$'
 
-  mapfile -t lines < ${TEST_VERSAMPLES}
+  mapfile -t lines < "${TEST_VERSAMPLES}"
   for line in "${lines[@]}"; do
     ca+=($(echo $line | sed -n "$regexp/\1/p"))
     ta+=($(echo $line | sed -n "$regexp/\2/p"))
@@ -42,7 +42,8 @@ testVersionSamples() {
   return $retcode
 }
 
+testVersionSamples
 
-
+compareVersions ">= 3.23" "1:5.39-3"
 
 

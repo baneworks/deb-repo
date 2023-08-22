@@ -129,13 +129,13 @@
           set -e; set -o pipefail;
 
           if [[ $1 == "help" ]]; then
-            cat <<- EOM
+            cat << EOM
             This script load and start Debian Bullseye docker container
             Container can be started with (default) or without attaching
 
             usage: run-debian-bullseye [bg]
             options: bg - to run container without attaching
-            EOM
+          EOM
             exit 0
           else
             if ! [[ -z $1 ]] && [[ $1 != "bg" ]]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-samples=".tests/.versamples"
+samples="tests/samples/version"
 mapfile -t lines < "$samples"
 declare -a ca ta va
 regexp='s/^\([\<\>=]\+\)\s\(.*\)\s\(.*\)$'

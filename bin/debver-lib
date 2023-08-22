@@ -35,9 +35,11 @@ dverCmp() {
   local v_epoch=$(sed -n "$regexp/\1/1p" <<< $vstr)
   [[ -z $t_epoch ]] && t_epoch=0
   [[ -z $v_epoch ]] && v_epoch=0
+
   if ! [[ $t_epoch -eq $v_epoch ]]; then
     [[ $t_epoch -gt $v_epoch ]] && echo ">"
     [[ $t_epoch -lt $v_epoch ]] && echo "<"
+    return 0
   fi
   ! [[ $t_epoch -eq 0 ]] && tstr=$(sed -n "$regexp/\2/p" <<< $tstr)
   ! [[ $v_epoch -eq 0 ]] && vstr=$(sed -n "$regexp/\2/p" <<< $vstr)
@@ -160,6 +162,7 @@ dverMatch() {
 
   [[ $? -gt 1 ]] && error 1 DVER "version compare error"
 
+  local match
   case "$cond" in
     '>') [[ $res == '>' ]] && match="true" ;;
     '>=') [[ $res == '>' || $res == '=' ]] && match="true" ;;

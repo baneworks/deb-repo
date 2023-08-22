@@ -35,8 +35,8 @@ taskClear() {
 
 # prepare for task: taskInit <task>
 taskInit() {
-  local task
-  task="$1"
+  local task="$1"
+
   wdir=$(tagDir "dsrc")"/$1"
   if [ -d $(guestCreateFHS "dbin" $task) ] ||
      [ -d $(guestCreateFHS "dsrc" $task) ] ||

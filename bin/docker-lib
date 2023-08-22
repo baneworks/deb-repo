@@ -19,12 +19,22 @@ DC_REPO="home/$DC_USER/$REPO_NAME"
 
 # get container pid
 function dockePid() {
-  local pid
-  pid=$(docker inspect -f '{{.State.Pid}}' $DC_NAME)
-  [ $pid -ge 1 ] || error 1 NOCONTAINER "no debian container running"
-  echo $(( $pid ))
+  local pid=$(docker inspect -f '{{.State.Pid}}' $DC_NAME)
+  if [[ $pid -le 1 ]]; then
+   error 1 NOCONTAINER "no debian container running"
+   return 1
+  fi
+  echo "$pid"
 }
 GUEST_PID=$(dockePid)
+
+dockerInit() {
+  if [[ GUEST_PID -le 1 ]]; then
+    echo ""
+    return 1
+  fi
+  echo "true"
+}
 
 # get /proc path for tag: dockerRelativePath <tag> <path>
 function dockerRelativePath() {
@@ -79,7 +89,7 @@ dockerAptSources() {
 # excute apt-get sources: dockerAptSources <pkg>
 dockerAptCache() {
   local pkg=$1
-  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg | grep -E '^Version|^Depends'")
+  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg | grep -E '^Version|^Depends|^Provides'")
   echo "$retval"
 }
 
