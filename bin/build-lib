@@ -167,20 +167,6 @@ breqRepStr() {
   echo "${res}$4"
 }
 
-# fixme: выкинь - не позорься
-# $1 - xoff (x offset), $2 - yoff (lines)
-breqArrowToUpper() {
-  tput sc
-  tput cuf $(( $1 + 40 )) # move the cursor right
-  echo -ne "---+" >&2
-  for ((y=1; y < $2; ++y)); do
-    tput cuu 1 # cursor up
-    echo -ne "|" >&2
-  done
-  echo -ne "<----+" >&2
-  tput rc # restore cursor
-}
-
 # @description Function to add node to build-depens tree. Reqursive.
 #
 # @example
@@ -188,25 +174,20 @@ breqArrowToUpper() {
 #
 # @arg level numeric target level of build-depens tree.
 # @arg bspec build-dependency in `bspec` format.
-# @arg retcode result code of pervious execution.
 # @arg retvalue result value of pervious execution.
-#      If cyclic dependency detected contains name of cyclic-dependecy,
-#      in other cases contains last processed dependency.
+#      Used at top level to find exact point of failure
 # @arg parents parents array of build-dependency upto root node.
 #
 # @stdout last processed (failed) package in bspec format (@see bspec).
 #
-# @exitcode code from previous execution on success.
-# @exitcode 1 on general failure.
-# @exitcode 2 if cyclic dependies detected.
+# @exitcode usial behaivor
 #
 # @see bspec
 breqAddNode() {
   local level=$(( $1 + 1 ))
   local bspec="$2"
-  local retcode="$3"
-  local retvalue="$4"
-  shift; shift; shift; shift
+  local retvalue="$3"
+  shift; shift; shift;
 
   local bname=$(bspecName $bspec)
   local bver=$(bspecVersionHR $bspec)
@@ -231,7 +212,7 @@ breqAddNode() {
         cyclic_parent=${pa[$prev_idx]}
       else #! cyclic source is task themself - giving up
         breqPrintStatus $level "err" "unbreakable circle"
-        echo "$bspec"
+        echo "$bspec"  # pass current package upstack
         return 1
       fi
     fi
@@ -248,27 +229,20 @@ breqAddNode() {
   echo "$parent" > "$req_dir/.parent"
   #? ---- /init ----
 
-  # echo -n "parent= $parent bspec=$bspec is_cyclic=$is_cyclic " >&2 # fixme: test
-
   #? ---- cyclic depend ----
   if [[ -n $is_cyclic ]]; then # yep, cyclic dependecy
     local cycled_bspec="$bname/`cat $cyclic_dir/.version | tr -d ' '`"
     # mark nodes
     echo "$parent $bspec" > "$cyclic_dir/.cyclic"
     echo "$cycled_bspec" > "$req_dir/.cyclic"
-
     breqPrintStatus $level "warn" "cyclic";
-
     if [[ "$cycled_bspec" == "$bspec" ]]; then # node of cycle may be with diff version req
-
-      # echo -n "cycled_bspec=$cycled_bspec " >&2 # fixme: test
-
       #* package may depend on other version, can we solve?
       # todo: write version compatibily checks, for now only warn
       breqPrintStatus $level "warn" "version";
     fi
-    echo "$bspec"
-    return 2 # as we processed cyclic and no go deeper - unset return code
+    echo "$bspec" # pass current package upstack
+    return 0 # cyclic themselfs isn't failure
   fi
   #? ---- /cyclic ----
 
@@ -278,7 +252,7 @@ breqAddNode() {
   if [[ -n $is_seen ]]; then
     breqPrintStatus $level "have" "$bname"
     echo "$retvalue"
-    return $retcode
+    return 0
   fi
   #? ---- /seen ----
 
@@ -295,9 +269,8 @@ breqAddNode() {
   #* nodeps is ok - check for cyclic we done earlier
   if [[ ${#da[@]} -eq 0 ]]; then
     breqPrintStatus $level "nodep"
-    # as this isn't error - keep retcode & retvalue unchanged
-    echo "$retvalue"
-    return $retcode
+    echo "$retvalue"  # don't mutate retvalue
+    return 0
   fi
   #? ---- /depends ----
 
@@ -315,12 +288,11 @@ breqAddNode() {
   if [[ -n $bver ]] ; then
     if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then # fixme: add propper parsing for: <!nocheck> [linux-any]
       idx=$(breqWhichVersion "$bver" "${va[@]}")
-      #! nover isn't good - lets caller decide
       if [[ $? -gt 0 ]]; then
         breqPrintStatus $level "err" "!ver"
         #* general error - mutating retcode & retvalue to this dependency
-        echo "$bspec"
-        return 1
+        echo "$bspec" # pass current package upstack
+        return 1 #! nover isn't good - lets caller decide
       fi
     fi
   fi
@@ -352,40 +324,14 @@ breqAddNode() {
     for bi in ${curset[@]} ; do
       echo -ne $(breqRepStr "$level" "\n" "\t" '-> ') >&2
       #* dive deeper
-      retvalue=$(breqAddNode $level "$bi" "$retcode" "$retvalue" "${pa[@]}")
-      retcode="$?" #* retcode must survive across call stack, except errors
-       # fixme: retval & retcode doesn't work as intended
-      # [[ $retcode -eq 2 && $retvalue == $bi ]] && breqPrintStatus $level "err" "cyclic"
-      [[ $retcode -eq 1 ]] && break;
-      # case $retcode in
-      #   0) retvalue="$bspec" ;;
-      #   2) breqPrintStatus $level "warn" "!cyclic";
-
-      #   *) break ;;
-      # esac
-
-      # if [[ $retcode -eq 1 ]]; then
-      # elif [[ $retcode -eq 2 ]]
-      #   breqPrintStatus $level "err" "!cyclic"
-      #   break
-      # fi
-      # #! general dependency processing error
-      # if [[ $retcode -eq 1 ]]; then
-      #   breqPrintStatus $level "err" "!fail"
-      #     #* on error we can mutate stdout results
-      #   retvalue="$last_package"
-      #   break
-      # fi
+      retvalue=$(breqAddNode $level "$bi" "$retvalue" "${pa[@]}")
+      local retcode="$?"
+      [[ $retcode -gt 0 ]] && break;
     done
   done
   #? ---- surfaced, thank god good ----
 
-  if [[ $retcode -eq 0 ]]; then # fixme: retval & retcode doesn't work as intended
-    echo "$bspec"
-  else
-    echo "$retvalue"
-  fi
-
+  echo "$retvalue"
   return $retcode
 }
 
@@ -410,9 +356,9 @@ buildTask() {
 
   local retcode last_package
   for bs in ${bspecs[@]}; do
-    last_package=$(breqAddNode 0 "$bs" 0 "" "$task")
+    last_package=$(breqAddNode 0 "$bs" "" "$task")
     retcode=$?
-    [[ $retcode -eq 1 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
+    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
     echo "" # instead [ OK ]
     # break # fixme: test
   done
