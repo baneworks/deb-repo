@@ -118,10 +118,10 @@ breqPrintStatus() {
   [[ $lvl -eq 1 ]] && nl="\n"
   case "$1" in
        'ok') [[ $lvl -eq 1 ]] && (printf " [${COLOR_GREEN}OK${COLOR_OFF}]$nl") >&2 || (printf "") >&2 ;;
-    'nodep') (printf "[${COLOR_YELLOW}!dep${COLOR_OFF}] ") >&2 ;;
-     'have') (printf "[${COLOR_YELLOW}+$2${COLOR_OFF}] ") >&2 ;;
+    'nodep') (printf "[${COLOR_GRAY}!dep${COLOR_OFF}] ") >&2 ;;
+     'have') (printf "[${COLOR_GRAY}+$2${COLOR_OFF}] ") >&2 ;;
      'note') (printf "[${COLOR_YELLOW}$2${COLOR_OFF}] ") >&2 ;;
-     'warn') (printf "[${COLOR_RED}$2${COLOR_OFF}] ") >&2 ;;
+     'warn') (printf "[${COLOR_YELLOW}$2${COLOR_OFF}] ") >&2 ;;
       'err') (printf "[${COLOR_RED}$2${COLOR_OFF}]\n") >&2 ;;
           *) (printf "[${COLOR_RED}$1:$2${COLOR_OFF}]$nl") >&2 ;;
   esac
@@ -233,31 +233,28 @@ breqAddNode() {
 
   #? ---- cyclic depend ----
   if [[ -n $is_cyclic ]]; then # yep, cyclic dependecy
-    local cycled_bver=$(cat $cyclic_dir/.version | tr -d ' ')
-    local cycled_bspec="$bname/${cycled_bver// /}"
+    local cyclic_bver=$(cat $cyclic_dir/.version | tr -d ' ')
+    local cyclic_bspec="$bname/$cyclic_bver"
     # mark nodes
     echo "$bspec" > "$cyclic_dir/.cyclic"
-    echo "$cycled_bspec" > "$req_dir/.cyclic"
+    echo "$cyclic_bspec" > "$req_dir/.cyclic"
     breqPrintStatus $level "warn" "cyclic";
-    if [[ "$cycled_bspec" != "$bspec" ]]; then # node of cycle may be with diff version req
+    if [[ "$cyclic_bspec" != "$bspec" ]]; then # node of cycle may be with diff version req
       #* package may depend on other version, can we solve?
-      # todo: write version compatibily checks, for now only warn
-
       local ver_rw
-      if [[ -n "$cycled_bver" || -n "$bver" ]]; then
-        ver_rw=$(dverCompose "$cycled_bver" "$(bspecVersionHR $bspec)")
+      if [[ -n "$cyclic_bver" && -n "$bver" ]]; then
+        ver_rw=$(dverCompose "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)")
         local ver_code="$?"
-        testAddToVReqSamples "$cycled_bver" "$(bspecVersionHR $bspec)" "$ver_rw" "$ver_code" # fixme: test samples entry
+        testAddToVReqSamples "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)" "$ver_rw" "$ver_code" # fixme: test samples entry
         if [[ "$ver_code" -gt 0 ]]; then #! cannot compose vreqs - giving up
-          breqPrintStatus $level "err" "version: \"${cycled_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\"";
+          breqPrintStatus $level "err" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\"";
           echo "$bspec" # pass current package upstack
           return 1 # cyclic themselfs isn't failure
         fi
       else
-        [[ -n "$cycled_bver" ]] && ver_rw="$cycled_bver" || ver_rw="$bver"
+        [[ -n "$cyclic_bver" ]] && ver_rw="$cyclic_bver" || ver_rw="$bver"
       fi
-
-      breqPrintStatus $level "warn" "version: \"${cycled_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\"";
+      breqPrintStatus $level "warn" "ver:add \"${ver_rw// /}\"";
     fi
     echo "$bspec" # pass current package upstack
     return 0 # cyclic themselfs isn't failure

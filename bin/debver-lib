@@ -199,7 +199,7 @@ dverCompose() {
   local l="$1" r="$2"
   local lc=$(dverCondition "$l") rc=$(dverCondition "$r")
   local lt=$(dverTarget "$l") rt=$(dverTarget "$r")
-  local res="false"
+  local res=""
 
   # fixme: implement '><' case
   if [[ "${lc:0:1}" == '>' && "${rc:0:1}" == '<' ]]; then
@@ -261,8 +261,8 @@ dverCompose() {
      [[ "${lc:0:1}" == '<' && "${rc:0:1}" == '<' ]]
   then
     # fixme: in dverCmp wrong op order
-    local cmp=$(dverCmp "$rt" "$lt")
-    if [[ "${lc:0:1}" == '<' && "${rc:0:1}" == '<' ]]; then  #? [< & <] variant
+    local cmp=$(dverCmp "$rt" "$lt") #? [< & <] variant
+    if [[ "${lc:0:1}" == '<' && "${rc:0:1}" == '<' ]]; then
       case $cmp in
       '<') echo "$l" && return 0;;
       '=') [[ "${lc:1:1}" == '=' ]] || echo "$r"; [[ "${rc:1:1}" == '=' ]] || echo "$l"; return 0;;
@@ -270,10 +270,10 @@ dverCompose() {
         *) echo "" && return 1 ;;
     esac
     fi
-    case $cmp in
-      '>') echo "$l" && return 0;;
+    case $cmp in #? [> & >] variant
+      '>') echo "$l" && return 0 ;;
       '=') [[ "${lc:1:1}" == '=' ]] || echo "$l"; [[ "${rc:1:1}" == '=' ]] || echo "$r"; return 0;;
-      '<') echo "$r" && return 0 ;;
+      '<') echo "$r" && return 0;;
         *) echo "" && return 1 ;;
     esac
   fi
