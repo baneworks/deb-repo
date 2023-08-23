@@ -27,20 +27,21 @@ bash-builder:
       ✔ version
         ☐ parse @done(23-08-21 05:51)
         ☐ interval maths
-          ☐ base
+          ✔ base @done(23-08-23 16:29)
           ☐ '>' '<' case
       ☐ walk thru depends
         ✔ flatten with version and provides @done(23-08-22 09:32)
         ✔ without circles detection @done(23-08-15 11:48)
         ✔ with circles detection @done(23-08-22 22:24)
-        ☐ with circles + version calc
+        ✔ with circles + version calc @done(23-08-23 16:29)
+      ☐ depends
+        ☐ strategy
+          ☐ cycles, short to longer
         ☐ installed
           ☐ filer
           ☐ with versions
-      ☐ binary depends
         ☐ dload
         ☐ install
-        ☐ clean
       ☐ build
         ☐ unpack
           ☐ detect type of archive
@@ -48,7 +49,8 @@ bash-builder:
         ☐ patch
         ☐ make
         ☐ package
-      ☐ package builder tool
+        ☐ clean depends
+      ☐ package builder
       ☐ extra
         ☐ tests
           ☐ write
