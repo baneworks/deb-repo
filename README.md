@@ -20,6 +20,85 @@ Additional task:
 > Consider the issue (possible only in theory) of ordering dependencies, breaking cyclic dependencies
 > and formation of the assembly order.
 
+# Terms and abbreviation
+
+`vreq` -- version requirement string (e.g. "(>= 2.14)")
+
+`pkg` -- package, in this work - actually just deb file
+
+`Dependant` -- package specied in "Depends" field (`DSC` in source packages case, package meta in binary case)
+
+`Cyclic dependency` -- specail type of graph edge, see [arch notes](#architecture-notes)
+
+# Architecture notes
+
+Depends parsing goals:
+
+1. Obtain all package dependans, dependans of dependants and so on.
+2. Detect any cyclic references.
+3. Correctly work with version requirements.
+
+Next image give you an idea with that we deal off.
+
+<div hidden>
+```plantuml
+@startuml
+perl --> base
+perl --> modules
+perl --> lib_perl
+modules --> base
+lib_perl --> lib_bz
+lib_bz --> libc6
+lib_bz --> lib_crypt
+libc6 --> libgcc_s1
+libgcc_s1 --> gcc-10-base
+libgcc_s1 --> libc6
+lib_crypt --> libc6
+lib_perl --> libc6
+lib_perl --> lib_crypt
+lib_crypt --> libc6
+lib_perl --> lib_db
+lib_db --> libc6
+lib_perl --> gdbm_compat
+gdbm_compat --> libc6
+gdbm_compat --> lib_gdbm
+lib_perl --> lib_gdbm
+lib_perl --> zlib
+zlib -> libc6
+lib_perl --> modules
+@enduml
+```
+</div>
+
+![Figure 1: Perl dependency tree](./img/perl-dep-tree.png){#fig:perl-tree}
+
+For the fun i will try to acchive all goals with single depends tree walk. Let's me explain what this mean
+on practice. As you see depend's graph for `perl` package contains multiple references to `libc6` as depend.
+Some of these references is cyclic edges.
+
+Also, each reference may contains own version requirement (i.e. `libcrypt` and `libdb` may have different
+version constraints). This constraints may be compatible and may not.
+
+Long story short, during walking on this kind of depend's graphs we get following issues:
+
+1. Cyclic edges needed to be process in way.
+2. Version constraints is needed to be rewritten at every occurs. Once again, we must rewrite every
+   constraint for `libc6` across whole depend's graph.
+
+There are two ways to do this, easy and hard. Easy one is:
+
+1. Walk thru depend's graph and collect info for all nodes.
+2. Detect cyclic edges. This is can be acchived easily, as we know about all nodes.
+3. Accumulate all version constrains and compose them to one suitable.
+
+Hard and most interesting way is done all in one iteration. For cyclic edges we will do:
+
+1. During walk try to detect cyclic edges, then mark endpoits of cycle.
+2. Rewind call stack to fist occurrence of node generating cyclic edge. This is needed to ensure that
+   processed portion of depend's tree doesn't contains a covering cycle.
+
+And for a version restriction we will doing in similar way - rewinding the call stack.
+
 # Preparing environment
 
 As I working within [NixOS](https://nixos.org/) usage of debian native build stack is a kind tricky. The
@@ -105,6 +184,15 @@ Results of `~/dev/deb-repo/make-repo` with **cyclic vetrex detection** is:
   ->{libc6} [+libc6]
 ```
 
+# Known bugs
+
+Dependant alternate specification (i.e. "`pkg_a` (`vreq`) | `pkg_b` (`vreq`)"), for now both packages will
+be considered as depends.
+
+Current version's maths not version requirements specified as bot sided inequality (i.g.
+"libc6 (>> 2.14), libc6 (<< 2.15)")
+
 # TODO
+
 
 # References
