@@ -111,6 +111,24 @@ dverCmp() {
   return $ret
 }
 
+# @description Is string an version requrenment.
+#
+# @example
+#    $(dverIsVReq <str>)
+#
+# @arg `str` requrenment string like ">= 2.4 2.31-13+deb11u6".
+#
+# @stdout "true" if str is Vreq.
+# @stdout "" if not.
+dverIsVReq() {
+  local str="$1"
+  local res
+  [[ "${str:0:1}" == '=' ]] && res="true"
+  [[ "${str:0:1}" == '>' ]] && res="true"
+  [[ "${str:0:1}" == '<' ]] && res="true"
+  echo "$res"
+}
+
 # @description Function to extract condition operator from depend requrenment string.
 #
 # @example
@@ -200,6 +218,12 @@ dverCompose() {
   local lc=$(dverCondition "$l") rc=$(dverCondition "$r")
   local lt=$(dverTarget "$l") rt=$(dverTarget "$r")
   local res=""
+
+  # easy - equals
+  if [[ "$l" == "$r" ]]; then
+    echo "$l"
+    return 0
+  fi
 
   # fixme: implement '><' case
   if [[ "${lc:0:1}" == '>' && "${rc:0:1}" == '<' ]]; then

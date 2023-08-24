@@ -4,6 +4,14 @@
 
 # endregion
 
+# region #! globals
+
+#! flatten file name
+BREQ_FLATTEN=".flatten"
+BREQ_FLATTEN_RW=".flatten-rw"
+
+# endregion
+
 # region #!task funcs
 
 # return task list from taskfile
@@ -51,8 +59,8 @@ taskInit() {
 
   info $task "dirs ..."
   taskMakeFHS $task # fixme: testing
-  [[ -f "$BREQ_DIR/$task/.flatten" ]] && rm -f "$BREQ_DIR/$task/.flatten"
-  touch "$BREQ_DIR/$task/.flatten"
+  [[ -f "$BREQ_DIR/$task/$BREQ_FLATTEN" ]] && rm -f "$BREQ_DIR/$task/$BREQ_FLATTEN"
+  touch "$BREQ_DIR/$task/$BREQ_FLATTEN"
   info $task "sources ..."
   [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!" # fixme: testing
 }
@@ -108,6 +116,219 @@ taskReqs() {
   fi
 
   echo "${bspecs[*]}"
+}
+
+# endregion
+
+# region #! depends finalisation
+
+# fixme: ugly as hell and just as slow
+# @description Function to summarize all of version constrains.
+#
+#*  Package entries (i.e. endnode of graph) can be in few forms:
+#     1. like 'libc6/2.31-13+deb11u5' - this is definetly a end node
+#        with version specification
+#     2. like 'libc6/2.31-13+deb11u5 <provides>' - also a end node,
+#        with version specification and 'provides' list
+#     3. like 'libc6/' - a end node or package reqirenments
+#     4. like 'libc6/ <provides>' - a end node or package reqirenments
+#*  To change end nodes in forms 1, 2:
+#*  a. check version compatibility and leave as is if fit
+#*  b. if not - call wichVersion find suitable and replace
+#
+#? The 3rd form can be replaced to vreq without any consequences
+#
+#! The 4th form looks discouraging and definitely cannot be replaced
+#! by vreq. I think you can do the same for cases of forms 1,2, but
+#! I'm not sure. So, for now, consider as a bug
+#
+# @example
+#    $(taskSumVReq <task>)
+#
+# @arg `task` a build task.
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+#
+# @see [Vreq rewrite](./README.md#version-requrinments)
+taskSumVReq() {
+  local task="$1"
+
+  info $task "versions ..."
+
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+
+  local flatten="$BREQ_DIR/$task/$BREQ_FLATTEN"
+  local flatten_rw="$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
+
+  mapfile -t lines < "$flatten"
+
+  for ((i=0; i<${#lines[@]}; ++i)); do #? i-for
+
+    local -a match_backwards # store vreq lines that suppose to be changed
+    local -a enode_backwards # store end nodes lines that suppose to be changed
+
+    local src_bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    local src_bname=$(bspecName "$src_bspec")
+    local src_bver=$(bspecVersionHR "$src_bspec")
+
+    # [[ "$src_bname" == "libc6" ]] || continue # fixme: test
+    # [[ "$src_bname" == "libgcc-s1" ]] || continue # fixme: test
+
+    echo "$i" >&2
+    echo "$src_bname" >&2
+
+    # fixme: slooow
+    if [[ -z $(dverIsVReq $src_bver) ]]; then #? end nodes
+      enode_backwards+=($i) #? better to parse separatly
+      continue
+    fi
+
+    local match=($(cat "$flatten" | grep -n '^[0-9]\+\s'"$src_bname"'\/\s\?.*$' | sed -n 's/^\([0-9]\+\):.*$/\1/p'))
+
+    echo "${match[@]:0:5}" >&2
+
+    for ((j=0; j<${#match[@]}; ++j)); do #? j-for
+
+      local lnum=$(( ${match[$j]} - 1 ))
+      local dst_bspec=$(echo ${lines[$lnum]} | sed -n "$regexp/\2/p")
+      local dst_bname=$(bspecName "$dst_bspec")
+      local dst_bver=$(bspecVersionHR "$dst_bspec")
+
+      [[ -n $(dverIsVReq "$dst_bver") ]] || continue #? end node
+
+      # fixme: test - never riched
+      if [[ -z "$dst_bver" ]]; then
+        error  1 "VERSUM" "expected vreq but got $dst_bspec"
+        return 1
+      fi
+
+      local dst_level=$(echo ${lines[$lnum]} | sed -n "$regexp/\1/p")
+      local dst_provides=$(echo ${lines[$lnum]} | sed -n "$regexp/\3/p")
+      local new_bv=$(dverCompose "$dst_bver" "$src_bver")
+
+      if [[ $? -gt 0 ]] || [[ -z "$new_bv" ]]; then #! empty vreq is also bad
+        error 1 "VERSUM" "fails to compose $src_bver with $dst_bver"
+        return 1
+      fi
+
+      src_bver="$new_bv"
+
+      if [[ -n "$dst_provides" ]]; then #! hmm, vreq looks strange 'libc6/>=2.14 libc6-2.25'
+        local rw_line="$dst_level $dst_bname/${src_bver// /} $dst_provides" #? provides just in case of
+        error 1 "VERSUM" "vreq also contains provides $rw_line"
+        return 1
+      fi
+
+      rw_line="$dst_level $dst_bname/${src_bver// /}"
+      match_backwards+=($lnum)
+
+    done #? /j-for
+
+    for ((k=0; k<${#match_backwards[@]}; ++k)); do #? --- backwards vreqs
+
+      local bk_idx=${match_backwards[$k]} # fixme: broke vscode systax
+      local k_line=${lines[$bk_idx]} # fixme: broke vscode systax
+      local k_bspec=$(echo "$k_line" | sed -n "$regexp/\2/p")
+      local k_bname=$(bspecName "$k_bspec")
+      local k_bver=$(bspecVersionHR "$k_bspec")
+
+      # fixme: test - uneeded if
+      if [[ -n $(dverIsVReq $k_bver) ]]; then #? 1st, 2nd form of end node
+        lines[${match_backwards[k]}]="$rw_line"
+      fi
+
+    done #? --- /bk_vreqs
+
+    local full_form_bspec prev_bspec
+    for ((k=0; k<${#enode_backwards[@]}; ++k)); do #? --- backwards end_nodes
+
+      local k_idx=${enode_backwards[$k]}
+      local k_line=${lines[$k_idx]}
+
+      local k_bspec=$(echo "$k_line" | sed -n "$regexp/\2/p")
+      local k_bname=$(bspecName "$k_bspec")
+      local k_bver=$(bspecVersion "$k_bspec")
+      local k_provides=$(echo "$k_line" | sed -n "$regexp/\3/p") # fixme: move to if to speedup
+
+      if [[ -z $(dverIsVReq $k_bver) ]]; then #? 1st, 2nd form of end node
+
+        [[ -z $full_form_bspec ]] && full_form_bspec="$k_bspec"
+
+        if [[ -z $k_provides ]]; then #? 1st form (without provides)
+          # echo "$k: $k_line" >&2
+          echo "end node: $k_bname/$k_bver (1nd form)" >&2
+          local rw_vreq=$(echo "$rw_line" | sed -n "$regexp/\2/p")
+          rw_vreq=$(bspecVersionHR "$rw_vreq")
+          echo dverMatch "$rw_vreq" "$k_bver" >&2
+          if [[ -n $(dverMatch "$rw_vreq" "$k_bver") ]]; then
+            echo "ok" >&2
+          else
+            echo '--------------' >&2
+            echo "$k_line" >&2
+            echo "$rw_line" >&2
+            echo '--------------' >&2
+            error 1 VERSUM "Vreq mismatch $rw_vreq & $k_bver at line ${k_line:0:16} ..."
+            return 1
+          fi
+        else  #? 1st form (with provides)
+          echo "$k: $k_line" >&2
+          echo "end node: $k_bname/$k_bver $k_provides (2nd form)" >&2
+          local rw_vreq=$(echo "$rw_line" | sed -n "$regexp/\2/p")
+          rw_vreq=$(bspecVersionHR "$rw_vreq")
+          echo dverMatch "$rw_vreq" "$k_bver" >&2
+          if [[ -n $(dverMatch "$rw_vreq" "$k_bver") ]]; then
+            echo "ok" >&2
+          else
+            echo "!matched" >&2
+          fi
+        fi
+
+      elif [[ -z "$k_bver" && -z "$k_provides" ]]; then #? 3rd form of end node
+
+        # just use
+        echo "$k: $k_line" >&2
+        echo "end node: $k_bspec (3rd form)" >&2
+
+      elif [[ -z "$k_bver" && -n "$k_provides" ]]; then #? 4th form of end node
+
+        error  1 VERSUM "this form or end nodes isn't supported yet $k_line"
+        return 1
+
+      else #! vreq
+        error 1 VERSUM "expected end node but got vreq at $k_line"
+        return 1
+      fi
+
+      #? ensures that end nodes are same, except 3rd form
+      if [[ $k -gt 0 ]] &&
+          [[ -n full_form_bspec ]] && # full form exists
+          [[ "$k_bspec" != "$prev_bspec" ]]
+      then
+        error 1 VERSUM "few end nodes differs $k_bspec != $prev_k_bspec"
+        return 1
+
+      fi
+
+      prev_bspec="$k_bspec"
+
+    done #? --- /bk_enodes ----
+
+    # fixme: test
+    # [[ $src_bname == "libc6" ]] && break
+
+    # fixme: test
+    # [[ $src_bname == "libgcc-s1" ]] && break
+
+  done #? i-for
+
+  [[ -f "$flatten_rw" ]] && rm -f "$flatten_rw"
+  touch "$flatten_rw"
+
+  for line in "${lines[@]}"; do
+    echo "$line" >> "$flatten_rw"
+  done
+
 }
 
 # endregion
