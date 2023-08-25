@@ -40,36 +40,6 @@ Depends parsing goals:
 
 Next image give you an idea with that we deal off.
 
-<div hidden>
-```plantuml
-@startuml
-perl --> base
-perl --> modules
-perl --> lib_perl
-modules --> base
-lib_perl --> lib_bz
-lib_bz --> libc6
-lib_bz --> lib_crypt
-libc6 --> libgcc_s1
-libgcc_s1 --> gcc-10-base
-libgcc_s1 --> libc6
-lib_crypt --> libc6
-lib_perl --> libc6
-lib_perl --> lib_crypt
-lib_crypt --> libc6
-lib_perl --> lib_db
-lib_db --> libc6
-lib_perl --> gdbm_compat
-gdbm_compat --> libc6
-gdbm_compat --> lib_gdbm
-lib_perl --> lib_gdbm
-lib_perl --> zlib
-zlib -> libc6
-lib_perl --> modules
-@enduml
-```
-</div>
-
 ![Figure 1: Perl dependency tree](./img/perl-dep-tree.png){#fig:perl-tree}
 
 For the fun i will try to acchive all goals with single depends tree walk. Let's me explain what this mean
@@ -186,13 +156,15 @@ Results of `~/dev/deb-repo/make-repo` with **cyclic vetrex detection** is:
 
 # Known bugs
 
-Dependant alternate specification (i.e. "`pkg_a` (`vreq`) | `pkg_b` (`vreq`)"), for now both packages will
-be considered as depends.
+Dependant alternate specification (i.e. "`pkg_a` (`vreq`) | `pkg_b` (`vreq`)") not supported. For now both
+packages will be considered as depends.
 
-Current version's maths not version requirements specified as bot sided inequality (i.g.
+Current version's maths not cover case if version requirements specified as bot sided inequality (i.g.
 "libc6 (>> 2.14), libc6 (<< 2.15)")
 
-# TODO
+Version specification rewrite for end nodes of graph not supported, script just leave end nodes as is (see
+`taksSumVreq` for details).
 
+# TODO
 
 # References

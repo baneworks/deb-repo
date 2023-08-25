@@ -21,7 +21,6 @@ for line in "${lines[@]}"; do
 
     res=$(dverCompose "$tst_1" "$tst_2")
 
-    [[ $ln -le 9 ]] && echo -ne " "
     echo -ne "$ln "
     if [[ "$res" != "!implemented" ]]; then
       if [[ "$res" == "$tst_r" ]]; then

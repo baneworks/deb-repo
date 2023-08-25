@@ -4,6 +4,14 @@
 
 # endregion
 
+# region #! globals
+
+#! flatten file name
+BREQ_FLATTEN=".flatten"
+BREQ_FLATTEN_RW=".flatten-rw"
+
+# endregion
+
 # region #!task funcs
 
 # return task list from taskfile
@@ -51,8 +59,8 @@ taskInit() {
 
   info $task "dirs ..."
   taskMakeFHS $task # fixme: testing
-  [[ -f "$BREQ_DIR/$task/.flatten" ]] && rm -f "$BREQ_DIR/$task/.flatten"
-  touch "$BREQ_DIR/$task/.flatten"
+  [[ -f "$BREQ_DIR/$task/$BREQ_FLATTEN" ]] && rm -f "$BREQ_DIR/$task/$BREQ_FLATTEN"
+  touch "$BREQ_DIR/$task/$BREQ_FLATTEN"
   info $task "sources ..."
   [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!" # fixme: testing
 }
@@ -108,6 +116,169 @@ taskReqs() {
   fi
 
   echo "${bspecs[*]}"
+}
+
+# endregion
+
+# region #! depends finalisation
+
+# fixme: ugly as hell and just as slow
+# todo: cover with tests
+# @description Function to summarize all of version constrains.
+#
+#*  Package entries (i.e. endnode of graph) can be in few forms:
+#     1. like 'libc6/2.31-13+deb11u5' - this is definetly a end node
+#        with version specification
+#     2. like 'libc6/2.31-13+deb11u5 <provides>' - also a end node,
+#        with version specification and 'provides' list
+#     3. like 'libc6/' - a end node or package reqirenments
+#     4. like 'libc6/ <provides>' - a end node or package reqirenments
+#*  To change end nodes in forms 1, 2:
+#*  a. check version compatibility and leave as is if fit
+#*  b. if not - call wichVersion find suitable and replace
+#
+#? The 3rd form can be replaced to vreq without any consequences
+#
+#! The 4th form looks discouraging and definitely cannot be replaced
+#! by vreq. I think you can do the same for cases of forms 1,2, but
+#! I'm not sure. So, for now, consider as a bug
+#
+# @example
+#    $(taskSumVReq <task>)
+#
+# @arg `task` a build task.
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+#
+# @see [Vreq rewrite](./README.md#version-requrinments)
+taskSumVreq() {
+  local task="$1"
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+  local flatten="$BREQ_DIR/$task/$BREQ_FLATTEN"
+  local flatten_rw="$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
+  local skip
+
+  info $task "versions ..."
+
+  mapfile -t lines < "$flatten"
+  for ((i=0; i<${#lines[@]}; ++i)); do #? i for lines
+    unset src_bspec src_bname src_bver
+    unset dst_bspec dst_bname dst_bver
+    unset enodes vreqs rw_bver pnode_bver
+    unset node_level node_bspec node_bname node_bver node_provides
+
+    [[ " ${skip[*]} " == *" $i "* ]] && continue #? skipping already processed lines
+
+    local src_bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    local src_bname=$(bspecName "$src_bspec")
+
+    # todo: narrow flatten during processing for speedup
+    local match=($(cat "$flatten" | grep -n '^[0-9]\+\s'"$src_bname"'\/\s\?.*$' | sed -n 's/^\([0-9]\+\):.*$/\1/p'))
+    [[ ${#match[@]} -eq 1 ]] && continue
+
+    #? splitting vreqs and epoints
+    local enodes vreqs
+    for ((j=0; j<${#match[@]}; ++j)); do
+      local li=$(( ${match[$j]} - 1))
+
+      local src_bspec=$(echo "${lines[$li]}" | sed -n "$regexp/\2/p")
+      local src_bname=$(bspecName "$src_bspec")
+      local src_bver=$(bspecVersionHR "$src_bspec")
+
+      if [[ -n $(dverIsVReq "$src_bver") ]]; then
+        vreqs+=($li)
+      else
+        enodes+=($li)
+      fi
+    done
+
+    #? vreqs
+    if [[ ${#vreqs[@]} -gt 0 ]]; then
+
+      local src_bspec=$(echo "${lines[${vreqs[0]}]}" | sed -n "$regexp/\2/p")
+      local src_bname=$(bspecName "$src_bspec")
+      local src_bver=$(bspecVersionHR "$src_bspec")
+
+      local rw_bver=$(bspecVersionHR "${vreqs[0]}")
+
+      # todo: with j=0 we have 1-useles run of loop
+      for ((j=0; j<${#vreqs[@]}; ++j)); do
+        local li=${vreqs[$j]}
+        local dst_bspec=$(echo ${lines[$li]} | sed -n "$regexp/\2/p")
+        local dst_bname=$(bspecName "$dst_bspec")
+        local dst_bver=$(bspecVersionHR "$dst_bspec")
+        local dst_level=$(echo ${lines[$li]} | sed -n "$regexp/\1/p")
+        local dst_provides=$(echo ${lines[$li]} | sed -n "$regexp/\3/p")
+
+        if [[ -n "$dst_provides" ]]; then #! vreq looks strange 'libc6/>=2.14 libc6-2.25'
+          error 1 VERSUM "vreq contains provides at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+          return 1
+        fi
+
+        #? after loop rw_bver will contains final vreq (rw_line - whole line)
+        if [[ -n "$dst_bver" ]]; then
+          [[ -z "$rw_bver" ]] && rw_bver="$dst_bver"
+
+          rw_bver=$(dverCompose "$dst_bver" "$rw_bver") # fixme: fix dverCompose arg order
+
+          if [[ $? -gt 0 ]] || [[ -z "$rw_bver" ]]; then #! empty vreq is also bad
+            error 1 VERSUM "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            return 1
+          fi
+        fi
+
+      done
+
+      #? replacing vreqs
+      for ((j=0; j<${#vreqs[@]}; ++j)); do
+        local li=${vreqs[$j]}
+        local dst_level=$(echo ${lines[$li]} | sed -n "$regexp/\1/p") # preserve level
+        lines[$li]="$dst_level $dst_bname/${rw_bver// /}"
+      done
+
+    fi #? /vreqs
+
+    #? walk thru epoins
+    if [[ -n "$rw_bver" ]]; then # some vreqs to rewrite
+      local pnode_bver
+      for ((j=0; j<${#enodes[@]}; ++j)); do
+        local li=${enodes[$j]}
+
+        local node_level=$(echo "${lines[$li]}" | sed -n "$regexp/\1/p")
+        local node_bspec=$(echo "${lines[$li]}" | sed -n "$regexp/\2/p")
+        local node_bname=$(bspecName "$node_bspec")
+        local node_bver=$(bspecVersion "$node_bspec")
+        local node_provides=$(echo ${lines[$li]} | sed -n "$regexp/\3/p")
+
+        if [[ -n "$node_bver"  ]]; then
+          if [[ -z $(dverMatch "$rw_bver" "$node_bver") ]]; then
+            error 1 VERSUM "end point not matched $rw_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            return 1
+          fi
+          if [[ -n "$pnode_bver" ]] && [[ -z $(dverCmp "$pnode_bver" "$node_bver") ]]; then
+            error 1 VERSUM "mess in end point versions at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            return 1
+          fi
+          [[ -z "$pnode_bver" ]] && pnode_bver="$node_bver"
+        fi
+
+        lines[$li]="$node_level $node_bspec $node_provides"
+      done
+    fi #? /enodes
+
+    skip+=(${enodes[@]})
+    skip+=(${vreqs[@]})
+
+  done #? i-for
+
+  #? ---- fixatig changes ----
+  [[ -f "$flatten_rw" ]] && rm -f "$flatten_rw" && touch "$flatten_rw"
+  for line in "${lines[@]}"; do
+    echo "$line" >> "$flatten_rw"
+  done
+
+  return 0
 }
 
 # endregion

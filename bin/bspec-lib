@@ -15,6 +15,6 @@ bspecVersion() {
 # return version in readabe form: bspecVersionHR <breq_spec>
 bspecVersionHR() {
   local bver=(${1//'/'/ })
-  echo $(sed -n 's/\([>=]\+\)/\1 /pg' <<< "${bver[1]}")
+  echo $(sed -n 's/\([<>=]\+\)/\1 /pg' <<< "${bver[1]}")
 }
 # endregion

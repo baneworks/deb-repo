@@ -90,6 +90,7 @@ breqWhichVersion() {
 
 # fixme: breqPrintMsg is ugly - rewrite
 # print node tag: breqPrintName <level> <@bnames> <message>"
+# @internal
 breqPrintName() {
   local lvl="$1"
   IFS="/" read -ra pth <<< "$2"
@@ -111,6 +112,7 @@ breqPrintName() {
 }
 
 # print status message: breqPrintStatus <level> <status> <message>
+# @internal
 breqPrintStatus() {
   local lvl=$1
   shift
@@ -127,6 +129,16 @@ breqPrintStatus() {
   esac
 }
 
+# replicate string: breqRepStr <count> <pre> <str> <post>
+# @internal
+breqRepStr() {
+  local res="$2"
+  for ((i=0; i<"$1"; i++)); do
+    res="${res}$3"
+  done
+  echo "${res}$4"
+}
+
 # endregion
 
 # region #! node funcs
@@ -136,7 +148,7 @@ breqSeenBefore() {
   local bspec="$1"
   local bname=$(bspecName "$bspec")
   local bver=$(bspecVersionHR "$bspec")
-  mapfile -t lines < "$BREQ_DIR/$task/.flatten"
+  mapfile -t lines < "$BREQ_DIR/$task/$BREQ_FLATTEN"
   for line in "${lines[@]}"; do
     line=$(sed 's/^\([0-9]\+\s\+\)\(.*\)$/\2/' <<< "$line")
     local la=(${line})
@@ -158,14 +170,6 @@ breqSeenBefore() {
       fi
     done
   done
-}
-
-breqRepStr() {
-  local res="$2"
-  for ((i=0; i<"$1"; i++)); do
-    res="${res}$3"
-  done
-  echo "${res}$4"
 }
 
 # @description Function to add node to build-depens tree. Reqursive.
@@ -265,6 +269,9 @@ breqAddNode() {
   #? ---- seen_before ----
   local is_seen=$(breqSeenBefore "$bspec")
   if [[ -n $is_seen ]]; then
+    #? add as endpoint for vreq checks
+    # todo: to so clever realisation
+    echo "$level $bspec" >> "$BREQ_DIR/$task/$BREQ_FLATTEN"
     breqPrintStatus $level "have" "$bname"
     echo "$retvalue"
     return 0
@@ -328,7 +335,7 @@ breqAddNode() {
   local provides="${prov_a[$idx]}"
   provides=$(breqParsePacked "${provides[@]}")
   provides=$(sed 's/\/=/\//g' <<< "$provides") # remove = from provides
-  echo "$level $bspec $provides" >> "$BREQ_DIR/$task/.flatten" # todo: cover with tests
+  echo "$level $bspec $provides" >> "$BREQ_DIR/$task/$BREQ_FLATTEN" # todo: cover with tests
   echo "$provides" > "$req_dir/.provides" # save depend's provides # fixme: not actualy needed
   #? ---- /provides ----
 
@@ -357,33 +364,42 @@ breqAddNode() {
 # init build process
 buildInit() {
   [[ -z $(dockerInit) ]] && return 1
-  # info buildInit "=== test mode ==="
+  info buildInit "--- test mode ---"
   # fixme: ugly
-  guestClearFHS # fixme: test
-  guestCreateFHS # fixme: test
+  # guestClearFHS # fixme: test
+  # guestCreateFHS # fixme: test
 }
 
 # build task: buildTask <task>
 buildTask() {
-  local task=$1 bspecs
-  taskInit $task
-  bspecs=$(taskReqs $task)
+  local task="$1"
+  local bspecs
+  # fixme: test
+  info "buildTask /$task/" "--- test mode ---"
+  info "buildTask /$task/" "... taskInit skipped ..."
+  # taskInit $task
+  # bspecs=$(taskReqs $task)
 
-  local retcode last_package
-  for bs in ${bspecs[@]}; do
-    last_package=$(breqAddNode 0 "$bs" "" "$task")
-    retcode=$?
-    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
-    echo "" # instead [ OK ]
-    # break # fixme: test
-  done
+  info "buildTask /$task/" "... breqAddNode skipped ..."
+  # fixme: test
+  # local retcode last_package
+  # for bs in ${bspecs[@]}; do
+  #   last_package=$(breqAddNode 0 "$bs" "" "$task")
+  #   retcode=$?
+  #   [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
+  #   echo "" # instead [ OK ]
+  #   # break # fixme: test
+  # done
+
+  info "buildTask /$task/" "... taskSumVReq skipped ..."
+  # taskSumVreq "$task"
 }
 
 # build all tasks: buildAll
 buildAll() {
   buildInit || return 1
   for task in $(taskList); do
-    buildTask $task
+    buildTask "$task"
     break # fixme: test
   done
 }
