@@ -29,7 +29,7 @@ taskMakeFHS() {
   dockerExec mkdir {"$btree",$bindir,"$srcdir","$tmpdir"}
 
   # fixme: test mode
-  # [[ -d "$btree" ]] && rm -rf "$btree"
+  [[ -d "$btree" ]] && rm -rf "$btree"
 
   # fixme: a hack
   mkdir -p "$btree"
@@ -44,12 +44,12 @@ taskClearFHS() {
   local tmpdir=$(tagValue "tmp")"/$1"
 
   # fixme: test mode
-  # dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
+  dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
 
   dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
 
    # fixme: test mode
-  # [[ -d "$btree" ]] && rm -rf "$btree"
+  [[ -d "$btree" ]] && rm -rf "$btree"
 }
 
 # todo: refactor
@@ -63,9 +63,9 @@ taskInit() {
      [ -d $(guestCreateFHS  "tmp" $task) ]
   then
     # fixme: test mode
-    info $task "=== in test mode ==="
+    # info $task "=== in test mode ==="
 
-    # taskClearFHS $task
+    taskClearFHS $task
   fi
 
   info $task "dirs ..."

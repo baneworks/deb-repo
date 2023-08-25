@@ -204,6 +204,9 @@ breqAddNode() {
   local bname=$(bspecName $bspec)
   local bver=$(bspecVersionHR $bspec)
 
+  # fixme: test
+  [[ $level -eq 1 && "$bname" != "autoconf "]] && return 0
+
   #? ---- init ----
   local pa=($@) # parents array
   local parent="${pa[-1]}" # prev node
@@ -385,12 +388,12 @@ buildInit() {
   [[ -z $(dockerInit) ]] && return 1
 
   # fixme: test mode
-  info buildInit "--- test mode ---"
+  # info buildInit "--- test mode ---"
 
   # fixme: ugly
   # fixme: test mode
-  # guestClearFHS
-  # guestCreateFHS
+  guestClearFHS
+  guestCreateFHS
 }
 
 # build task: buildTask <task>
@@ -399,22 +402,22 @@ buildTask() {
   local bspecs
 
    # fixme: test mode
-  info "buildTask /$task/" "--- test mode ---"
-  info "buildTask /$task/" "... taskInit skipped ..."
+  # info "buildTask /$task/" "--- test mode ---"
+  # info "buildTask /$task/" "... taskInit skipped ..."
 
-  # taskInit $task
-  # bspecs=$(taskReqs $task)
+  taskInit $task
+  bspecs=$(taskReqs $task)
 
    # fixme: test mode
-  info "buildTask /$task/" "... breqAddNode skipped ..."
+  # info "buildTask /$task/" "... breqAddNode skipped ..."
 
-  # local retcode last_package
-  # for bs in ${bspecs[@]}; do
-  #   last_package=$(breqAddNode 0 "$bs" "" "$task")
-  #   retcode=$?
-  #   [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
-  #   echo "" # instead [ OK ]
-  # done
+  local retcode last_package
+  for bs in ${bspecs[@]}; do
+    last_package=$(breqAddNode 0 "$bs" "" "$task")
+    retcode=$?
+    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
+    echo "" # instead [ OK ]
+  done
 
    # fixme: test mode
   # info "buildTask /$task/" "... taskSumVReq skipped ..."
