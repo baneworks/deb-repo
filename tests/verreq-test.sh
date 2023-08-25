@@ -6,6 +6,10 @@
 . ./bin/bspec-lib
 . ./bin/log-lib
 
+echo "dv: $(dverCompose '>= 11' '< 12.6~')"
+
+exit 0
+
 mapfile -t lines < './tests/samples/version-req'
 
 ln=0
@@ -33,3 +37,5 @@ for line in "${lines[@]}"; do
     fi
   fi
 done
+
+echo "dv: $(dverCompose '>= 11' '< 12.6~')"

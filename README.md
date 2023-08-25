@@ -26,11 +26,13 @@ Additional task:
 
 `pkg` -- package, in this work - actually just deb file
 
-`Dependant` -- package specied in "Depends" field (`DSC` in source packages case, package meta in binary case)
+`dependant`, `depends` -- package specied in "Depends" field (in `DSC` for source packages case)
 
-`Cyclic dependency` -- specail type of graph edge, see [arch notes](#architecture-notes)
+`cyclic dependency` -- specail type of graph edge, see [arch notes](#architecture-notes)
 
 # Architecture notes
+
+## Depends parsing
 
 Depends parsing goals:
 
@@ -63,11 +65,93 @@ There are two ways to do this, easy and hard. Easy one is:
 
 Hard and most interesting way is done all in one iteration. For cyclic edges we will do:
 
-1. During walk try to detect cyclic edges, then mark endpoits of cycle.
+1. During walk try to detect cyclic edges, then mark end nodes of cycle.
 2. Rewind call stack to fist occurrence of node generating cyclic edge. This is needed to ensure that
    processed portion of depend's tree doesn't contains a covering cycle.
 
 And for a version restriction we will doing in similar way - rewinding the call stack.
+
+## Unspinning depends
+
+Similar to the construction of the graph itself, to build the order of satisfaction of dependencies, two
+ways are seen - the easy one and the fun.
+
+The easy way is to use `find` command, as we already have graph representation mirrored in dir structure.
+For `autoconf` case `find -type d` will produce:
+
+```sh
+❯❯❯ find -type d
+./autoconf
+./autoconf/perl
+./autoconf/perl/perl-base
+./autoconf/perl/perl-modules-5.32
+./autoconf/perl/perl-modules-5.32/perl-base
+./autoconf/perl/libperl5.32
+./autoconf/perl/libperl5.32/libbz2-1.0
+./autoconf/perl/libperl5.32/libbz2-1.0/libc6
+./autoconf/perl/libperl5.32/libbz2-1.0/libc6/libgcc-s1
+./autoconf/perl/libperl5.32/libbz2-1.0/libc6/libgcc-s1/gcc-10-base
+./autoconf/perl/libperl5.32/libbz2-1.0/libc6/libgcc-s1/libc6
+./autoconf/perl/libperl5.32/libbz2-1.0/libc6/libcrypt1
+./autoconf/perl/libperl5.32/libbz2-1.0/libc6/libcrypt1/libc6
+./autoconf/perl/libperl5.32/libc6
+./autoconf/perl/libperl5.32/libcrypt1
+./autoconf/perl/libperl5.32/libdb5.3
+./autoconf/perl/libperl5.32/libdb5.3/libc6
+./autoconf/perl/libperl5.32/libgdbm-compat4
+./autoconf/perl/libperl5.32/libgdbm-compat4/libc6
+./autoconf/perl/libperl5.32/libgdbm-compat4/libgdbm6
+./autoconf/perl/libperl5.32/libgdbm-compat4/libgdbm6/libc6
+./autoconf/perl/libperl5.32/libgdbm6
+./autoconf/perl/libperl5.32/zlib1g
+./autoconf/perl/libperl5.32/zlib1g/libc6
+./autoconf/perl/libperl5.32/perl-modules-5.32
+./autoconf/m4
+./autoconf/m4/libc6
+./autoconf/m4/libsigsegv2
+./autoconf/m4/libsigsegv2/libc6
+./autoconf/debianutils
+```
+
+All that's left to do now:
+
+1. Count '/' in a string.
+2. Sort rows in ascending order by '/'.
+3. Add newly encountered elements to the list, checking for the presence of a '.cyclic' file inside.
+4. If there is a '.cyclic', the node is not added (so the dependency source will definitely be higher).
+5. Enjoin our depends list.
+
+Depend solving in following order:
+
+The Path of Suffering is working with a `.flatten`, once you've collected it. We do something like this:
+
+1. Select a range containing the entire branch from the root.
+2. Run in ascending level collecting unique elements.
+
+> Remember to process root nodes in the same order they are declared, see [bugs](#bugs-caveats-limitations).
+
+## Cyclic depends
+
+When a cycle is encountered, we fold it into a flat in the following order:
+
+1. Remember the current level and add the dependency specification to a separate list.
+2. While the level is growing - we continue to add specifications there.
+3. As soon as the level has become less than the level of the beginning of the cycle - all done and our
+   cycle is expanded.
+
+::: {#fig:cycle-ex layout-ncol=2}
+
+![graph](img/cycle-graph.png){width=20%}
+![tree](img/cycle-tree.png){width=72%}
+
+cyclic depend: a) themself, b) reaction of the script
+:::
+
+For example, in cyclic depends like shown resulting flat list will be as:
+
+```sh
+libc6 libgcc-s1 libgcc1 gcc-10-base libcrypt1
+```
 
 # Preparing environment
 
@@ -154,7 +238,7 @@ Results of `~/dev/deb-repo/make-repo` with **cyclic vetrex detection** is:
   ->{libc6} [+libc6]
 ```
 
-# Known bugs
+# Bugs, caveats, limitations
 
 Dependant alternate specification (i.e. "`pkg_a` (`vreq`) | `pkg_b` (`vreq`)") not supported. For now both
 packages will be considered as depends.
@@ -164,6 +248,10 @@ Current version's maths not cover case if version requirements specified as bot 
 
 Version specification rewrite for end nodes of graph not supported, script just leave end nodes as is (see
 `taksSumVreq` for details).
+
+For educational purposes, nodes whose dependencies have already been processed are not added to the
+`.flatten`, respectively, the branches below the first root are not complete and cannot be processed
+independently. In a normal implementation, of course, nodes already encountered should be supplemented.
 
 # TODO
 

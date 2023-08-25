@@ -25,7 +25,7 @@ bash-builder:
       ✔ gather spec @done(23-08-02 08:24)
       ✔ parse build-reqs @done(23-08-02 08:24)
       ✔ version
-        ☐ parse @done(23-08-21 05:51)
+        ✔ parse @done(23-08-25 19:47)
         ✔ interval maths @done(23-08-25 02:42)
           ✔ base @done(23-08-23 16:29)
           ✔ '>' '<' case @done(23-08-25 02:42)
@@ -36,6 +36,7 @@ bash-builder:
         ✔ with circles + version calc @done(23-08-23 16:29)
         ✔ version rewrite @done(23-08-25 02:43)
       ☐ depends
+        ☐ cleanups
         ☐ strategy
           ☐ cycles, short to longer
         ☐ installed
@@ -51,7 +52,6 @@ bash-builder:
         ☐ make
         ☐ package
         ☐ clean depends
-      ☐ package builder
       ☐ extra
         ☐ tests
           ☐ write
@@ -69,6 +69,14 @@ bash-builder:
         ☐ out-repo simulation
           ☐ stable builds
           ☐ unstable builds
+    ☐ package builder
+      ☐ name of package
+      ☐ all globals to one
+      ☐ support configure
+      ☐ libs to /usr/share/share
+      ☐ some globals to ini
+      ☐ build targets co command line
+      ☐ build tree to /tmp
     ☐ fixes
       ☐ support '|' depends
       ✔ fix "dh-autoreconf" @done(23-08-21 07:45)
@@ -76,6 +84,7 @@ bash-builder:
       ✔ seen_before rewrite @done(23-08-22 09:32)
       ✔ versions req '>' '<' case @done(23-08-25 02:43)
       ☐ dverCmp left <-> right op change
+      ☐ if root node hasn't deps - it not added to .flatten
     ☐ document
       ☐ bspec-lib
       ☐ build-lib

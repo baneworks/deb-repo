@@ -27,8 +27,12 @@ taskMakeFHS() {
   local srcdir=$(tagValue "dsrc")"/$1"
   local tmpdir=$(tagValue "tmp")"/$1"
   dockerExec mkdir {"$btree",$bindir,"$srcdir","$tmpdir"}
-  # [[ -d "$btree" ]] && rm -rf "$btree" # fixme: testing
-  mkdir -p "$btree" # fixme: a hack
+
+  # fixme: test mode
+  # [[ -d "$btree" ]] && rm -rf "$btree"
+
+  # fixme: a hack
+  mkdir -p "$btree"
 }
 
 # todo: rewrite & add abitilty to change working mode [docker | local]
@@ -38,9 +42,14 @@ taskClearFHS() {
   local srcdir=$(tagValue "dsrc")"/$1"
   local bindir=$(tagValue "dbin")"/$1"
   local tmpdir=$(tagValue "tmp")"/$1"
-  # dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"} # fixme: test
-  dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
-  # [[ -d "$btree" ]] && rm -rf "$btree" # fixme: testing
+
+  # fixme: test mode
+  # dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
+
+  dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
+
+   # fixme: test mode
+  # [[ -d "$btree" ]] && rm -rf "$btree"
 }
 
 # todo: refactor
@@ -53,16 +62,23 @@ taskInit() {
      [ -d $(guestCreateFHS "dsrc" $task) ] ||
      [ -d $(guestCreateFHS  "tmp" $task) ]
   then
-    # info $task "=== in test mode ==="
-    taskClearFHS $task # fixme: testing
+    # fixme: test mode
+    info $task "=== in test mode ==="
+
+    # taskClearFHS $task
   fi
 
   info $task "dirs ..."
-  taskMakeFHS $task # fixme: testing
+
+   # fixme: test mode
+  taskMakeFHS $task
+
   [[ -f "$BREQ_DIR/$task/$BREQ_FLATTEN" ]] && rm -f "$BREQ_DIR/$task/$BREQ_FLATTEN"
   touch "$BREQ_DIR/$task/$BREQ_FLATTEN"
   info $task "sources ..."
-  [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!" # fixme: testing
+
+  # fixme: test mode
+  [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!"
 }
 
 # get task dcs filename: taskDsc <task>
@@ -73,12 +89,16 @@ taskDsc () {
   echo "$dsc"
 }
 
+# fixme: refactor taskParseBR
 # parse Build-Depends and return array: taskParseBR <br_string>
-taskParseBR() { # fixme: refactor taskParseBR
+taskParseBR() {
   local str="$1"
   str=$(tr -cd '[:print:]' <<< $str)
 
-  str=$(sed 's/ |/,/g' <<< $str) # fixme: alternate depends (x | y) not supported yet, installing both
+  # fixme: alternate depends (x | y) not supported yet, installing both
+  str=$(sed 's/ | bsdmainutils (<< 12\.1\.1~),/,/g' <<< $str) # fixme: hack
+  str=$(sed 's/ |/,/g' <<< $str)
+
   str=${str//', '/'/'}
   str=${str//' '/'&'}
   str=$(sed 's/^\&//g' <<< "$str")
@@ -220,7 +240,8 @@ taskSumVreq() {
         if [[ -n "$dst_bver" ]]; then
           [[ -z "$rw_bver" ]] && rw_bver="$dst_bver"
 
-          rw_bver=$(dverCompose "$dst_bver" "$rw_bver") # fixme: fix dverCompose arg order
+          # fixme: fix dverCompose arg order
+          rw_bver=$(dverCompose "$dst_bver" "$rw_bver")
 
           if [[ $? -gt 0 ]] || [[ -z "$rw_bver" ]]; then #! empty vreq is also bad
             error 1 VERSUM "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"

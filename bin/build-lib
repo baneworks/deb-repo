@@ -8,7 +8,8 @@
 BREQ_MAX_DEPTH=17
 
 #! build-reqs dir
-BREQ_DIR="${PROJ_DIR}/.build-reqs" # fixme: ugly realisation of BTREE
+# fixme: ugly realisation of BTREE
+BREQ_DIR="${PROJ_DIR}/.build-reqs"
 
 # endregion
 
@@ -40,7 +41,8 @@ breqUnpackString() {
 # unpack and call taskParseBR: breqParsePacked <string>
 breqParsePacked() {
   local unpacked=$(breqUnpackString "$1")
-  unpacked=$(sed 's/\(.*\)\:any$/\1/' <<< "$unpacked") # fixme: package:any hack
+  # fixme: package:any hack
+  unpacked=$(sed 's/\(.*\)\:any$/\1/' <<< "$unpacked")
   local breqs=$(taskParseBR "$unpacked")
   echo "${breqs[*]}"
 }
@@ -67,7 +69,7 @@ breqWhichVersion() {
   shift
   local avail=($@)
 
-  # fixme: temp test entry
+  # fixme: test samples
   testAddToVersionSamples $cond $avail # generate version samples
 
   for ((idx=0; idx < ${#avail[@]}; ++idx)); do
@@ -172,6 +174,11 @@ breqSeenBefore() {
   done
 }
 
+# todo: add feature to store cyclic info
+#? 1. a feature to store in flat file (e.g. $task/.cyclics)
+#? 2. a feature to mark entire cyclic chain using (retcode=2
+#?    and retvalue preserve machanics)
+
 # @description Function to add node to build-depens tree. Reqursive.
 #
 # @example
@@ -202,7 +209,7 @@ breqAddNode() {
   local parent="${pa[-1]}" # prev node
   local pinfo # parents str separated by "/"
   local req_dir="$BREQ_DIR" # path to store node info
-  local is_cyclic cyclic_dir cyclic_parent
+  local is_cyclic cyclic_dir cyclic_parent cyclic_flat
 
   local prev_idx=-1
   for p in "${pa[@]}"; do
@@ -215,7 +222,6 @@ breqAddNode() {
       cyclic_dir="$req_dir"
       if [[ $prev_idx -ge 0 ]]; then # store cyclic parent
         cyclic_parent=${pa[$prev_idx]}
-        # cyclic_parent="$p" # fixme: check for correct parent name
       else #! cyclic source is task themself - giving up
         breqPrintStatus $level "err" "unbreakable circle"
         echo "$bspec"  # pass current package upstack
@@ -226,6 +232,7 @@ breqAddNode() {
 
   req_dir+="/$bname"
   pinfo="${pinfo:1}"
+  cyclic_flat="$BREQ_DIR/${pinfo[0]}/.cyclics"
 
   breqPrintName $level "$pinfo/$bname"
 
@@ -240,6 +247,7 @@ breqAddNode() {
     local cyclic_bver=$(cat $cyclic_dir/.version | tr -d ' ')
     local cyclic_bspec="$bname/$cyclic_bver"
     # mark nodes
+    echo "$level $pinfo/$bname" > "$cyclic_flat" # to flatten cycles
     echo "$bspec" > "$cyclic_dir/.cyclic"
     echo "$cyclic_bspec" > "$req_dir/.cyclic"
     breqPrintStatus $level "warn" "cyclic";
@@ -249,11 +257,18 @@ breqAddNode() {
       if [[ -n "$cyclic_bver" && -n "$bver" ]]; then
         ver_rw=$(dverCompose "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)")
         local ver_code="$?"
-        testAddToVReqSamples "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)" "$ver_rw" "$ver_code" # fixme: test samples entry
+        # fixme: test samples
+        testAddToVReqSamples "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)" "$ver_rw" "$ver_code"
         if [[ "$ver_code" -gt 0 ]]; then #! cannot compose vreqs - giving up
-          breqPrintStatus $level "err" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\"";
-          echo "$bspec" # pass current package upstack
-          return 1 # cyclic themselfs isn't failure
+          if [[ "$ver_code" -eq 2 ]]; then # todo: implement '> <' composition
+            breqPrintStatus $level "warn" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => !impl'
+            echo "$bspec"
+            return 0 #! not implemented must not be a caller problem
+          else
+            breqPrintStatus $level "err" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\""
+            echo "$bspec" # pass current package upstack
+            return 1 # cyclic themselfs isn't failure
+          fi
         fi
       else
         [[ -n "$cyclic_bver" ]] && ver_rw="$cyclic_bver" || ver_rw="$bver"
@@ -290,6 +305,7 @@ breqAddNode() {
 
   #* nodeps is ok - check for cyclic we done earlier
   if [[ ${#da[@]} -eq 0 ]]; then
+    echo "$level $bspec" >> "$BREQ_DIR/$task/$BREQ_FLATTEN"
     breqPrintStatus $level "nodep"
     echo "$retvalue"  # don't mutate retvalue
     return 0
@@ -308,7 +324,8 @@ breqAddNode() {
   #* which version is needed?
   local idx=0
   if [[ -n $bver ]] ; then
-    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then # fixme: add propper parsing for: <!nocheck> [linux-any]
+    # fixme: add propper parsing for: <!nocheck> [linux-any]
+    if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then
       idx=$(breqWhichVersion "$bver" "${va[@]}")
       if [[ $? -gt 0 ]]; then
         breqPrintStatus $level "err" "!ver"
@@ -322,7 +339,8 @@ breqAddNode() {
   # update bspec, bver to selected version
   bver="${va[$idx]}"
   bspec="$bname/$bver"
-  echo "${bdeps[@]}" > "$req_dir/.satisfyers" # save depend's satisfyers # fixme: not actualy needed
+  # fixme: not actualy needed
+  echo "${bdeps[@]}" > "$req_dir/.satisfyers" # save depend's satisfyers
   #? ---- /versions ----
 
   #? ---- gathering provides ----
@@ -336,7 +354,8 @@ breqAddNode() {
   provides=$(breqParsePacked "${provides[@]}")
   provides=$(sed 's/\/=/\//g' <<< "$provides") # remove = from provides
   echo "$level $bspec $provides" >> "$BREQ_DIR/$task/$BREQ_FLATTEN" # todo: cover with tests
-  echo "$provides" > "$req_dir/.provides" # save depend's provides # fixme: not actualy needed
+  # fixme: not actualy needed
+  echo "$provides" > "$req_dir/.provides" # save depend's provides
   #? ---- /provides ----
 
   #? ---- dive in, praise the buddha ----
@@ -364,35 +383,43 @@ breqAddNode() {
 # init build process
 buildInit() {
   [[ -z $(dockerInit) ]] && return 1
+
+  # fixme: test mode
   info buildInit "--- test mode ---"
+
   # fixme: ugly
-  # guestClearFHS # fixme: test
-  # guestCreateFHS # fixme: test
+  # fixme: test mode
+  # guestClearFHS
+  # guestCreateFHS
 }
 
 # build task: buildTask <task>
 buildTask() {
   local task="$1"
   local bspecs
-  # fixme: test
+
+   # fixme: test mode
   info "buildTask /$task/" "--- test mode ---"
   info "buildTask /$task/" "... taskInit skipped ..."
+
   # taskInit $task
   # bspecs=$(taskReqs $task)
 
+   # fixme: test mode
   info "buildTask /$task/" "... breqAddNode skipped ..."
-  # fixme: test
+
   # local retcode last_package
   # for bs in ${bspecs[@]}; do
   #   last_package=$(breqAddNode 0 "$bs" "" "$task")
   #   retcode=$?
   #   [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
   #   echo "" # instead [ OK ]
-  #   # break # fixme: test
   # done
 
-  info "buildTask /$task/" "... taskSumVReq skipped ..."
-  # taskSumVreq "$task"
+   # fixme: test mode
+  # info "buildTask /$task/" "... taskSumVReq skipped ..."
+
+  taskSumVreq "$task"
 }
 
 # build all tasks: buildAll
@@ -400,7 +427,8 @@ buildAll() {
   buildInit || return 1
   for task in $(taskList); do
     buildTask "$task"
-    break # fixme: test
+    # fixme: test mode
+    break
   done
 }
 

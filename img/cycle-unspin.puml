@@ -1,0 +1,8 @@
+@startuml
+(*) --> libc6
+libc6 --> libgcc_s1
+libc6 --> lib_crypt
+libgcc_s1 --> gcc_10_base
+libgcc_s1 --> libc6
+lib_crypt --> libc6
+@enduml
