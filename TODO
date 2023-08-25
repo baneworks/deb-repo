@@ -26,14 +26,15 @@ bash-builder:
       ✔ parse build-reqs @done(23-08-02 08:24)
       ✔ version
         ☐ parse @done(23-08-21 05:51)
-        ☐ interval maths
+        ✔ interval maths @done(23-08-25 02:42)
           ✔ base @done(23-08-23 16:29)
-          ☐ '>' '<' case
-      ☐ walk thru depends
+          ✔ '>' '<' case @done(23-08-25 02:42)
+      ✔ walk thru depends @done(23-08-25 02:42)
         ✔ flatten with version and provides @done(23-08-22 09:32)
         ✔ without circles detection @done(23-08-15 11:48)
         ✔ with circles detection @done(23-08-22 22:24)
         ✔ with circles + version calc @done(23-08-23 16:29)
+        ✔ version rewrite @done(23-08-25 02:43)
       ☐ depends
         ☐ strategy
           ☐ cycles, short to longer
@@ -73,7 +74,7 @@ bash-builder:
       ✔ fix "dh-autoreconf" @done(23-08-21 07:45)
       ✔ refactor addNode @done(23-08-20 19:58)
       ✔ seen_before rewrite @done(23-08-22 09:32)
-      ☐ versions req '>' '<' case
+      ✔ versions req '>' '<' case @done(23-08-25 02:43)
       ☐ dverCmp left <-> right op change
     ☐ document
       ☐ bspec-lib

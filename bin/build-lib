@@ -364,7 +364,7 @@ breqAddNode() {
 # init build process
 buildInit() {
   [[ -z $(dockerInit) ]] && return 1
-  info buildInit "=== test mode ==="
+  info buildInit "--- test mode ---"
   # fixme: ugly
   # guestClearFHS # fixme: test
   # guestCreateFHS # fixme: test
@@ -375,10 +375,12 @@ buildTask() {
   local task="$1"
   local bspecs
   # fixme: test
-  info buildTask "=== test mode ==="
+  info "buildTask /$task/" "--- test mode ---"
+  info "buildTask /$task/" "... taskInit skipped ..."
   # taskInit $task
   # bspecs=$(taskReqs $task)
 
+  info "buildTask /$task/" "... breqAddNode skipped ..."
   # fixme: test
   # local retcode last_package
   # for bs in ${bspecs[@]}; do
@@ -389,7 +391,8 @@ buildTask() {
   #   # break # fixme: test
   # done
 
-  taskSumVReq "$task"
+  info "buildTask /$task/" "... taskSumVReq skipped ..."
+  # taskSumVreq "$task"
 }
 
 # build all tasks: buildAll

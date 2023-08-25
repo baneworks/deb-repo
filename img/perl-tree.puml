@@ -1,0 +1,25 @@
+@startuml
+perl --> base
+perl --> modules
+perl --> lib_perl
+modules --> base
+lib_perl --> lib_bz
+lib_bz --> libc6
+lib_bz --> lib_crypt
+libc6 --> libgcc_s1
+libgcc_s1 --> gcc-10-base
+libgcc_s1 --> libc6
+lib_crypt --> libc6
+lib_perl --> libc6
+lib_perl --> lib_crypt
+lib_crypt --> libc6
+lib_perl --> lib_db
+lib_db --> libc6
+lib_perl --> gdbm_compat
+gdbm_compat --> libc6
+gdbm_compat --> lib_gdbm
+lib_perl --> lib_gdbm
+lib_perl --> zlib
+zlib -> libc6
+lib_perl --> modules
+@enduml
