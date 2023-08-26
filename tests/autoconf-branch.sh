@@ -1,59 +1,138 @@
 #!/usr/bin/env bash
 
-branch="1 autoconf/2.69-14
-2 perl/5.32.1-4+deb11u2 libansicolor-perl/5.01 libarchive-tar-perl/2.36 libattribute-handlers-perl/1.01 libautodie-perl/2.32 libcompress-raw-bzip2-perl/2.093 libcompress-raw-zlib-perl/2.093 libcompress-zlib-perl/2.093 libcpan-meta-perl/2.150010 libcpan-meta-requirements-perl/2.140 libcpan-meta-yaml-perl/0.018 libdigest-md5-perl/2.55.01 libdigest-perl/1.17.01 libdigest-sha-perl/6.02 libencode-perl/3.06 libexperimental-perl/0.020 libextutils-cbuilder-perl/0.280234 libextutils-command-perl/7.44 libextutils-install-perl/2.14 libextutils-parsexs-perl/3.400000 libfile-spec-perl/3.7800 libhttp-tiny-perl/0.076 libi18n-langtags-perl/0.44 libio-compress-base-perl/2.093 libio-compress-bzip2-perl/2.093 libio-compress-perl/2.093 libio-compress-zlib-perl/2.093 libio-zlib-perl/1.10 libjson-pp-perl/4.04000 liblocale-maketext-perl/1.29 liblocale-maketext-simple-perl/0.21.01 libmath-bigint-perl/1.999818 libmath-complex-perl/1.5901 libmime-base64-perl/3.15 libmodule-corelist-perl/5.20210123 libmodule-load-conditional-perl/0.70 libmodule-load-perl/0.34 libmodule-metadata-perl/1.000037 libnet-perl/1:3.11 libnet-ping-perl/2.72 libparams-check-perl/0.38 libparent-perl/0.238 libparse-cpan-meta-perl/2.150010 libperl-ostype-perl/1.010 libpod-escapes-perl/1.07 libpod-simple-perl/3.40 libstorable-perl/3.21 libsys-syslog-perl/0.36 libtest-harness-perl/3.42 libtest-simple-perl/1.302175 libtest-tester-perl/1.302175 libtest-use-ok-perl/1.302175 libthread-queue-perl/3.14 libthreads-perl/2.25 libthreads-shared-perl/1.61 libtime-hires-perl/1.9764 libtime-local-perl/1.2800 libtime-piece-perl/1.3401 libunicode-collate-perl/1.27 libversion-perl/1:0.9924 libversion-requirements-perl/ podlators-perl/4.14
-3 perl-base/=5.32.1-4+deb11u2
-3 perl-modules-5.32/5.32.1-4+deb11u2 perl-modules/
-4 perl-base/=5.32.1-4+deb11u2
-3 libperl5.32/5.32.1-4+deb11u2
-4 libbz2-1.0/1.0.8-4
-
-5 libc6/2.31-13+deb11u6
-6 libgcc-s1/10.2.1-6 libgcc1/1:10.2.1-6
-7 gcc-10-base/=10.2.1-6
-6 libcrypt1/1:4.4.18-4
-
-4 libc6/=2.31-13+deb11u6
-4 libcrypt1/=1:4.4.18-4
-4 libdb5.3/5.3.28+dfsg1-0.8
-5 libc6/=2.31-13+deb11u6
-4 libgdbm-compat4/1.19-2
-5 libc6/=2.31-13+deb11u6
-5 libgdbm6/1.19-2
-6 libc6/=2.31-13+deb11u6
-4 libgdbm6/>=1.18-3
-4 zlib1g/1:1.2.11.dfsg-2+deb11u2 libz1/
-5 libc6/=2.31-13+deb11u6
-4 perl-modules-5.32/>=5.32.1-4+deb11u2
-2 m4/1.4.18-5
-3 libc6/=2.31-13+deb11u6
-3 libsigsegv2/2.13-1
-4 libc6/=2.31-13+deb11u6
-2 debianutils/>=1.8"
+branch=`cat ./tests/samples/ac-branch`
 
 source ./bin/bspec-lib
+source ./bin/log-lib
 
 regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
 btree="./.build-reqs/bash"
+pkgs_out="$btree/.packages"
+
+[[ -f "$pkgs_out" ]] && rm -f "$pkgs_out"
 
 readarray -t lines <<< "$branch"
 
-prev_level=""
+CYC_MAX_DEPTH=20
+
+# $1 - bname
+# $2 - prev level
+# $3 - level
+# $@ - array
+# @stdout array
+makeChain() {
+  local bn="$1" prev="$2" lvl="$3"
+  shift; shift; shift
+  local chain=("$@")
+
+  if [[ $lvl -gt $prev ]]; then
+    chain+=($bn)
+  elif [[ $lvl -eq $prev ]]; then
+    chain[-1]=$bn
+  else
+    local len=${#chain[@]}
+    chain=(${chain[@]:0:$(( $lvl - 1 ))})
+    chain+=($bn)
+  fi
+
+  echo "${chain[@]}"
+}
+
+unset pa pkgs bname bspec level li i
+declare -a pa p_pa pkgs glob_cyc glob_cyc_spec
+
+p_pa_dir=""
+p_bname=""
+pp_level=0
+p_level=0
 for ((i=0; i<"${#lines[@]}"; ++i)); do
-  lnum=$(( $i + 1 ))
+  li=$(( $i + 1 ))
   level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
   bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
-  echo "/$i/ $level $bspec"
+  bname=$(bspecName "$bspec")
 
-  if [[ -f "$btree/.cyclic" ]]; then
+  #? skipping if already added
+  if [[ " ${pkgs[*]} " == *" $bname "* || " ${glob_cyc[*]} " == *" $bname "* ]]; then
+    pa=($(makeChain "$bname" "$p_level" "$level" ${pa[@]}))
+    pa_dir="${pa[*]}"
+    pa_dir=${pa_dir// /'/'}
+    p_level="$level"
 
-    echo "--- cyclic ---"
+    echo -e "$COLOR_GRAY$li $pa_dir$COLOR_OFF"
+
+    continue #? skipping already processed lines
+  fi
+
+  pa=($(makeChain "$bname" "$p_level" "$level" ${pa[@]}))
+  pa_dir="${pa[*]}"
+  pa_dir=${pa_dir// /'/'}
+
+  #? --- cyclic ---
+  if [[ -f "./.build-reqs/bash/$pa_dir/.cyclic" ]]; then
+    # echo "/$li/ $bname lvl: $level plvl: $p_level $pa_dir"
+    # echo "--- cyclic ---"
+
+    pp_level="$p_level"
+    p_pa_dir="$pa_dir"
+    p_pa=("${pa[@]}")
+
+    # declare -a cyclic=($bname)
+    declare -a cyclic=($bname)
+    declare -a cyclic_spec=($bspec)
+    echo -e "$COLOR_YELLOW$li ${bname}$COLOR_OFF"
+
+    glob_cyc+=("$bname")
+    glob_cyc_spec+=("$bspec")
+    in_cycle="true"
+    j=0
+    # local j=0 in_cycle="true"
+    while [[ -n $in_cycle ]]; do
+      c_li=$(( $i + $j + 1 ))
+      c_level=$(echo "${lines[$c_li]}" | sed -n "$regexp/\1/p")
+      c_bspec=$(echo "${lines[$c_li]}" | sed -n "$regexp/\2/p")
+      c_bname=$(bspecName "$c_bspec")
+
+      [[ $level -gt $c_level || $j -ge $CYC_MAX_DEPTH ]] && break
+
+      cyclic+=("$c_bname")
+      glob_cyc+=("$c_bname")
+      cyclic_spec+=("$c_bspec")
+      glob_cyc_spec+=("$c_bspec")
+
+
+      echo -e "$COLOR_YELLOW$(( $c_li + 1)) ${c_bname}$COLOR_OFF"
+
+      j=$(( $j + 1 ))
+
+    done
+    unset in_cycle #cyclic
+
+    if [[ $j -ge $CYC_MAX_DEPTH ]]; then
+      echo "depth of cicle reached limit"
+      exit 1
+    else
+      i=$(( $i + $j ))
+      p_level="$pp_level"
+      pa_dir="$p_pa_dir"
+      pa=("${p_pa[@]}")
+
+      pa=($(makeChain "$p_bname" "$pp_level" "$c_level" ${pa[@]}))
+      pa_dir="${pa[*]}"
+      pa_dir=${pa_dir// /'/'}
+
+      # echo "${cyclic[@]}" >> "$pkgs_out"
+      echo "${cyclic_spec[@]}" >> "$pkgs_out"
+      continue
+    fi
+    #? --- /cyclic ---
 
   fi
 
+  pkgs+=($bname)
+  # echo "$bname" >> "$pkgs_out"
+  echo "$bspec" >> "$pkgs_out"
 
-  [[ -z $prev_level ]] && continue
+  echo -e "$COLOR_GREEN$li $pa_dir$COLOR_OFF"
 
-
-  prev_level="$level"
+  p_level="$level"
 done

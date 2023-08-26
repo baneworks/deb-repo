@@ -6,9 +6,13 @@
 
 # region #! globals
 
-#! flatten file name
+#! file related
 BREQ_FLATTEN=".flatten"
 BREQ_FLATTEN_RW=".flatten-rw"
+BREQ_PACKAGES=".packages"
+
+#! depends parsing related
+CYC_MAX_DEPTH=20 # limit for cyclic processing
 
 # endregion
 
@@ -29,7 +33,7 @@ taskMakeFHS() {
   dockerExec mkdir {"$btree",$bindir,"$srcdir","$tmpdir"}
 
   # fixme: test mode
-  [[ -d "$btree" ]] && rm -rf "$btree"
+  # [[ -d "$btree" ]] && rm -rf "$btree"
 
   # fixme: a hack
   mkdir -p "$btree"
@@ -44,12 +48,11 @@ taskClearFHS() {
   local tmpdir=$(tagValue "tmp")"/$1"
 
   # fixme: test mode
-  dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
-
-  dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
+  # dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
+  # dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
 
    # fixme: test mode
-  [[ -d "$btree" ]] && rm -rf "$btree"
+  # [[ -d "$btree" ]] && rm -rf "$btree"
 }
 
 # todo: refactor
@@ -63,22 +66,16 @@ taskInit() {
      [ -d $(guestCreateFHS  "tmp" $task) ]
   then
     # fixme: test mode
-    # info $task "=== in test mode ==="
-
-    taskClearFHS $task
+    info "taskInit /$task/" "... taskClearFHS skipped ..."
+    # info $task "dirs ..."
+    # taskClearFHS $task
   fi
 
-  info $task "dirs ..."
-
    # fixme: test mode
-  taskMakeFHS $task
-
-  [[ -f "$BREQ_DIR/$task/$BREQ_FLATTEN" ]] && rm -f "$BREQ_DIR/$task/$BREQ_FLATTEN"
-  touch "$BREQ_DIR/$task/$BREQ_FLATTEN"
-  info $task "sources ..."
-
-  # fixme: test mode
-  [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!"
+  info "taskInit /$task/" "... sources skipped ..."
+  # taskMakeFHS $task
+  # info $task "sources ..."
+  # [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!"
 }
 
 # get task dcs filename: taskDsc <task>
@@ -300,6 +297,187 @@ taskSumVreq() {
   done
 
   return 0
+}
+
+# @description Function to contruct package chain.
+#
+# @example
+#    $(taskMakeChain <bname> <prev level> <level> <array>)
+#
+# @arg `bname` a package name to add
+# @arg `prev level` a previous level of chain
+# @arg `level` a current level of chain
+# @arg `array` a cain to add package to
+#
+# @stdout package chain array
+#
+# @internal
+taskMakeChain() {
+  local bn="$1" prev="$2" lvl="$3"
+  shift; shift; shift
+  local chain=("$@")
+
+  if [[ $lvl -gt $prev ]]; then
+    chain+=($bn)
+  elif [[ $lvl -eq $prev ]]; then
+    chain[-1]=$bn
+  else
+    # local len=${#chain[@]}
+    chain=(${chain[@]:0:$(( $lvl - 1 ))})
+    chain+=($bn)
+  fi
+  echo "${chain[@]}"
+}
+
+# todo: cover with tests
+# @description Function to finalize all depends to flat list.
+#   Parses `.flatten`, unspin cycles and return ready to install
+#   packages list with suitable version specification.
+#
+# @example
+#    $(taskFinalDepends <task>)
+#
+# @arg `task` a build task.
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+#
+# @see [depends parsing](./README.md#-depends-parsing)
+taskFinalDepends() {
+  local task="$1"
+  local pkgs_out="$BREQ_DIR/$task/$BREQ_PACKAGES"
+
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+
+  local chain prev_chain
+
+  local pkg_bnames pkg_bspecs
+  local cpkg_bnames cpkg_bspecs
+
+  local chain_dir prev_cdir
+  local prev_bname
+  local p_level=0 pp_level=0
+
+  info $task "packages ..."
+
+  readarray -t lines < "$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
+
+  for ((i=0; i<"${#lines[@]}"; ++i)); do #? main for
+
+    local li=$(( $i + 1 ))
+    local level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
+    local bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    local bname=$(bspecName "$bspec")
+
+    #? skipping if already added
+    if [[ " ${pkg_bnames[*]} " == *" $bname "* || " ${cpkg_bnames[*]} " == *" $bname "* ]]; then
+
+      chain=($(taskMakeChain "$bname" "$p_level" "$level" ${chain[@]}))
+
+      chain_dir="${chain[*]}"
+      chain_dir=${chain_dir// /'/'}
+
+      p_level="$level"
+
+      # todo: find better way to inform
+      echo -ne "\t$COLOR_GRAY" >&2
+      [[ $li -lt 10 ]] && echo -n " " >&2
+      [[ $li -lt 100 ]] && echo -n " " >&2
+      echo -e "$li $chain_dir$COLOR_OFF" >&2
+
+      continue
+    fi
+
+    chain=($(taskMakeChain "$bname" "$p_level" "$level" ${chain[@]}))
+
+    chain_dir="${chain[*]}"
+    chain_dir=${chain_dir// /'/'}
+
+    #? --- cyclic ---
+    if [[ -f "$BREQ_DIR/$task/$chain_dir/.cyclic" ]]; then
+
+      pp_level="$p_level"
+
+      prev_cdir="$chain_dir"
+      prev_chain=("${chain[@]}")
+
+      # declare -a cyclic=($bname)
+      local cycle_bnames=($bname)
+      local cycle_bspecs=($bspec)
+
+      # todo: find better way to inform
+      echo -ne "\t$COLOR_YELLOW" >&2
+      [[ $c_li -lt 10 ]] && echo -n " " >&2
+      [[ $c_li -lt 100 ]] && echo -n " " >&2
+      echo -e "$li $bname$COLOR_OFF" >&2
+
+      cpkg_bnames+=("$bname")
+      cpkg_bspecs+=("$bspec")
+
+      local j=0 in_cycle="true"
+      while [[ -n $in_cycle ]]; do
+        local c_li=$(( $i + $j + 1 ))
+        local c_level=$(echo "${lines[$c_li]}" | sed -n "$regexp/\1/p")
+        local c_bspec=$(echo "${lines[$c_li]}" | sed -n "$regexp/\2/p")
+        local c_bname=$(bspecName "$c_bspec")
+
+        [[ $level -gt $c_level || $j -ge $CYC_MAX_DEPTH ]] && break
+
+        cycle_bnames+=("$c_bname")
+        cycle_bspecs+=("$c_bspec")
+        cpkg_bnames+=("$bname")
+        cpkg_bspecs+=("$bspec")
+
+        # todo: find better way to inform
+        echo -ne "\t$COLOR_YELLOW" >&2
+        [[ $c_li -lt 10 ]] && echo -n " " >&2
+        [[ $c_li -lt 100 ]] && echo -n " " >&2
+        echo -e "$c_li $c_bname$COLOR_OFF" >&2
+
+        j=$(( $j + 1 ))
+
+      done
+      unset in_cycle
+
+      if [[ $j -ge $CYC_MAX_DEPTH ]]; then
+        error 1 FDEPS "depth of cicle reached limit"
+        retutn 1
+      else
+        # todo: find better way to inform
+        echo -ne "\t$COLOR_YELLOW" >&2
+        [[ $c_li -lt 10 ]] && echo -n " " >&2
+        [[ $c_li -lt 100 ]] && echo -n " " >&2
+        echo -e "$(( $i + $j + 1)) $bname$COLOR_OFF" >&2
+
+        i=$(( $i + $j ))
+        p_level="$pp_level"
+
+        chain_dir="$prev_cdir"
+        chain=("${prev_chain[@]}")
+
+        chain=($(taskMakeChain "$prev_bname" "$pp_level" "$c_level" ${chain[@]}))
+        chain_dir="${chain[*]}"
+        chain_dir=${chain_dir// /'/'}
+
+        echo "${cycle_bspecs[@]}" >> "$pkgs_out"
+        continue
+      fi
+
+    fi #? --- /cyclic ---
+
+    pkg_bnames+=($bname)
+    p_level="$level"
+
+    echo "$bspec" >> "$pkgs_out"
+
+    # todo: find better way to inform
+    echo -ne "\t" >&2
+    [[ $li -lt 10 ]] && echo -n " " >&2
+    [[ $li -lt 100 ]] && echo -n " " >&2
+    echo "$li $chain_dir" >&2
+
+  done #? /main
+
 }
 
 # endregion

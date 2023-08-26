@@ -204,15 +204,15 @@ breqAddNode() {
   local bname=$(bspecName $bspec)
   local bver=$(bspecVersionHR $bspec)
 
-  # fixme: test
-  [[ $level -eq 1 && "$bname" != "autoconf "]] && return 0
+  # fixme: test mode
+  [[ $level -eq 1 && "$bname" != "autoconf" ]] && return 0
 
   #? ---- init ----
   local pa=($@) # parents array
   local parent="${pa[-1]}" # prev node
   local pinfo # parents str separated by "/"
   local req_dir="$BREQ_DIR" # path to store node info
-  local is_cyclic cyclic_dir cyclic_parent cyclic_flat
+  local is_cyclic cyclic_dir cyclic_parent
 
   local prev_idx=-1
   for p in "${pa[@]}"; do
@@ -235,7 +235,6 @@ breqAddNode() {
 
   req_dir+="/$bname"
   pinfo="${pinfo:1}"
-  cyclic_flat="$BREQ_DIR/${pinfo[0]}/.cyclics"
 
   breqPrintName $level "$pinfo/$bname"
 
@@ -250,10 +249,10 @@ breqAddNode() {
     local cyclic_bver=$(cat $cyclic_dir/.version | tr -d ' ')
     local cyclic_bspec="$bname/$cyclic_bver"
     # mark nodes
-    echo "$level $pinfo/$bname" > "$cyclic_flat" # to flatten cycles
     echo "$bspec" > "$cyclic_dir/.cyclic"
     echo "$cyclic_bspec" > "$req_dir/.cyclic"
     breqPrintStatus $level "warn" "cyclic";
+    retcode=0
     if [[ "$cyclic_bspec" != "$bspec" ]]; then # node of cycle may be with diff version req
       #* package may depend on other version, can we solve?
       local ver_rw
@@ -270,7 +269,7 @@ breqAddNode() {
           else
             breqPrintStatus $level "err" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\""
             echo "$bspec" # pass current package upstack
-            return 1 # cyclic themselfs isn't failure
+            return 0 # cyclic themselfs isn't failure
           fi
         fi
       else
@@ -388,12 +387,12 @@ buildInit() {
   [[ -z $(dockerInit) ]] && return 1
 
   # fixme: test mode
-  # info buildInit "--- test mode ---"
+  info buildInit "--- test mode ---"
 
   # fixme: ugly
   # fixme: test mode
-  guestClearFHS
-  guestCreateFHS
+  # guestClearFHS
+  # guestCreateFHS
 }
 
 # build task: buildTask <task>
@@ -401,28 +400,31 @@ buildTask() {
   local task="$1"
   local bspecs
 
-   # fixme: test mode
-  # info "buildTask /$task/" "--- test mode ---"
-  # info "buildTask /$task/" "... taskInit skipped ..."
+  # fixme: test mode
+  info "buildTask /$task/" "--- test mode ---"
+  info "buildTask /$task/" "... taskInit skipped ..."
 
-  taskInit $task
-  bspecs=$(taskReqs $task)
+  # taskInit $task
+  # bspecs=$(taskReqs $task)
 
-   # fixme: test mode
-  # info "buildTask /$task/" "... breqAddNode skipped ..."
+  # fixme: test mode
+  info "buildTask /$task/" "... breqAddNode skipped ..."
+  # local retcode last_package
+  # for bs in ${bspecs[@]}; do
+  #   last_package=$(breqAddNode 0 "$bs" "" "$task")
+  #   retcode=$?
+  #   [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
+  #   echo "" # instead [ OK ]
+  # done
 
-  local retcode last_package
-  for bs in ${bspecs[@]}; do
-    last_package=$(breqAddNode 0 "$bs" "" "$task")
-    retcode=$?
-    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
-    echo "" # instead [ OK ]
-  done
+  # fixme: test mode
+  info "buildTask /$task/" "... taskSumVReq skipped ..."
+  # taskSumVreq "$task"
 
-   # fixme: test mode
-  # info "buildTask /$task/" "... taskSumVReq skipped ..."
-
-  taskSumVreq "$task"
+  # fixme: test mode
+  # info "buildTask /$task/" "... taskFinalDepends skipped ..."
+  [[ -f "$BREQ_DIR/$task/.packages" ]] && rm -f "$BREQ_DIR/$task/.packages"
+  taskFinalDepends "$task"
 }
 
 # build all tasks: buildAll
