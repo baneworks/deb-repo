@@ -35,10 +35,10 @@ bash-builder:
         ✔ with circles detection @done(23-08-22 22:24)
         ✔ with circles + version calc @done(23-08-23 16:29)
         ✔ version rewrite @done(23-08-25 02:43)
-      ☐ depends
-        ☐ cleanups
-        ☐ strategy
-          ☐ cycles, short to longer
+      ✔ depends @done(23-08-26 23:41)
+        ✔ cleanups @done(23-08-26 23:41)
+        ✔ strategy @done(23-08-26 23:41)
+          ✔ cycles, short to longer @done(23-08-26 23:41)
         ☐ installed
           ☐ filer
           ☐ with versions

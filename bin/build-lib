@@ -205,7 +205,7 @@ breqAddNode() {
   local bver=$(bspecVersionHR $bspec)
 
   # fixme: test mode
-  [[ $level -eq 1 && "$bname" != "autoconf" ]] && return 0
+  # [[ $level -eq 1 && "$bname" != "autoconf" ]] && return 0
 
   #? ---- init ----
   local pa=($@) # parents array
@@ -386,11 +386,9 @@ breqAddNode() {
 buildInit() {
   [[ -z $(dockerInit) ]] && return 1
 
-  # fixme: test mode
-  info buildInit "--- test mode ---"
-
   # fixme: ugly
   # fixme: test mode
+  info buildInit "--- test mode ---"
   # guestClearFHS
   # guestCreateFHS
 }
@@ -401,7 +399,6 @@ buildTask() {
   local bspecs
 
   # fixme: test mode
-  info "buildTask /$task/" "--- test mode ---"
   info "buildTask /$task/" "... taskInit skipped ..."
 
   # taskInit $task
@@ -418,12 +415,12 @@ buildTask() {
   # done
 
   # fixme: test mode
-  info "buildTask /$task/" "... taskSumVReq skipped ..."
+  # info "buildTask /$task/" "... taskSumVReq skipped ..."
   # taskSumVreq "$task"
 
   # fixme: test mode
   # info "buildTask /$task/" "... taskFinalDepends skipped ..."
-  [[ -f "$BREQ_DIR/$task/.packages" ]] && rm -f "$BREQ_DIR/$task/.packages"
+  # [[ -f "$BREQ_DIR/$task/.packages" ]] && rm -f "$BREQ_DIR/$task/.packages"
   taskFinalDepends "$task"
 }
 

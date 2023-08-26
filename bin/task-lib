@@ -12,7 +12,7 @@ BREQ_FLATTEN_RW=".flatten-rw"
 BREQ_PACKAGES=".packages"
 
 #! depends parsing related
-CYC_MAX_DEPTH=20 # limit for cyclic processing
+CYC_MAX_DEPTH=200 # limit for cyclic processing
 
 # endregion
 
@@ -34,9 +34,10 @@ taskMakeFHS() {
 
   # fixme: test mode
   # [[ -d "$btree" ]] && rm -rf "$btree"
-
-  # fixme: a hack
-  mkdir -p "$btree"
+  # mkdir -p "$btree/$1"
+  # touch "$btree/$1/.flatten"
+  # touch "$btree/$1/.flatten-rw"
+  touch "$btree/$1/.packages"
 }
 
 # todo: rewrite & add abitilty to change working mode [docker | local]
@@ -48,10 +49,7 @@ taskClearFHS() {
   local tmpdir=$(tagValue "tmp")"/$1"
 
   # fixme: test mode
-  # dockerExec rm -rf {"$btree","$bindir","$tmpdir"}
-  # dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
-
-   # fixme: test mode
+  dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
   # [[ -d "$btree" ]] && rm -rf "$btree"
 }
 
@@ -71,11 +69,11 @@ taskInit() {
     # taskClearFHS $task
   fi
 
-   # fixme: test mode
+  # fixme: test mode
   info "taskInit /$task/" "... sources skipped ..."
   # taskMakeFHS $task
   # info $task "sources ..."
-  # [[ $(dockerAptSources $task) -eq 0 ]] || error -1 $task "apt-get source failed!"
+  # [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
 }
 
 # get task dcs filename: taskDsc <task>
@@ -125,12 +123,6 @@ taskReqs() {
 
   local dsc=$(taskDsc $task)
   local bspecs=($(taskParseBR "$(cat $dsc | sed -n 's/Build-Depends:\(.*\)/\1/p')"))
-
-  if [ -d $BREQ_DIR/$task ]; then
-    rm -rf $BREQ_DIR/$task/*
-  else
-    mkdir $BREQ_DIR/$task
-  fi
 
   echo "${bspecs[*]}"
 }
@@ -322,9 +314,12 @@ taskMakeChain() {
   elif [[ $lvl -eq $prev ]]; then
     chain[-1]=$bn
   else
-    # local len=${#chain[@]}
-    chain=(${chain[@]:0:$(( $lvl - 1 ))})
-    chain+=($bn)
+    if [[ $lvl -ge 1 ]]; then
+      chain=(${chain[@]:0:$(( $lvl - 1 ))})
+      chain+=($bn)
+    else
+      chain=($bn)
+    fi
   fi
   echo "${chain[@]}"
 }
@@ -407,8 +402,8 @@ taskFinalDepends() {
 
       # todo: find better way to inform
       echo -ne "\t$COLOR_YELLOW" >&2
-      [[ $c_li -lt 10 ]] && echo -n " " >&2
-      [[ $c_li -lt 100 ]] && echo -n " " >&2
+      [[ $li -lt 10 ]] && echo -n " " >&2
+      [[ $li -lt 100 ]] && echo -n " " >&2
       echo -e "$li $bname$COLOR_OFF" >&2
 
       cpkg_bnames+=("$bname")
@@ -421,12 +416,13 @@ taskFinalDepends() {
         local c_bspec=$(echo "${lines[$c_li]}" | sed -n "$regexp/\2/p")
         local c_bname=$(bspecName "$c_bspec")
 
-        [[ $level -gt $c_level || $j -ge $CYC_MAX_DEPTH ]] && break
+        [[ $level -ge $c_level || $j -ge $CYC_MAX_DEPTH ]] && break
 
+        # todo: what if case package already in cycle
         cycle_bnames+=("$c_bname")
         cycle_bspecs+=("$c_bspec")
-        cpkg_bnames+=("$bname")
-        cpkg_bspecs+=("$bspec")
+        cpkg_bnames+=("$c_bname")
+        cpkg_bspecs+=("$c_bspec")
 
         # todo: find better way to inform
         echo -ne "\t$COLOR_YELLOW" >&2
@@ -478,6 +474,7 @@ taskFinalDepends() {
 
   done #? /main
 
+  return 0
 }
 
 # endregion
