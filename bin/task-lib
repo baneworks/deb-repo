@@ -54,8 +54,8 @@ taskClearFHS() {
   local tmpdir=$(tagValue "tmp")"/$1"
 
   # fixme: test mode
-  dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
-  [[ -d "$btree" ]] && rm -rf "$btree"
+  # dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
+  # [[ -d "$btree" ]] && rm -rf "$btree"
 }
 
 # todo: refactor
@@ -69,16 +69,16 @@ taskInit() {
      [ -d $(guestCreateFHS  "tmp" $task) ]
   then
     # fixme: test mode
-    # info "taskInit /$task/" "... taskClearFHS skipped ..."
-    info $task "dirs ..."
-    taskClearFHS $task
+    info "taskInit /$task/" "... taskClearFHS skipped ..."
+    # info $task "dirs ..."
+    # taskClearFHS $task
   fi
 
   # fixme: test mode
-  # info "taskInit /$task/" "... sources skipped ..."
-  taskMakeFHS $task
-  info $task "sources ..."
-  [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
+  info "taskInit /$task/" "... sources skipped ..."
+  # taskMakeFHS $task
+  # info $task "sources ..."
+  # [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
 }
 
 # get task dcs filename: taskDsc <task>
@@ -456,10 +456,10 @@ taskFinalDepends() {
       p_level="$level"
 
       # todo: find better way to inform
-      echo -ne "\t$COLOR_GRAY" >&2
-      [[ $li -lt 10 ]] && echo -n " " >&2
-      [[ $li -lt 100 ]] && echo -n " " >&2
-      echo -e "$li $chain_dir$COLOR_OFF" >&2
+      # echo -ne "\t$COLOR_GRAY" >&2
+      # [[ $li -lt 10 ]] && echo -n " " >&2
+      # [[ $li -lt 100 ]] && echo -n " " >&2
+      # echo -e "$li $chain_dir$COLOR_OFF" >&2
 
       continue
     fi
@@ -483,10 +483,10 @@ taskFinalDepends() {
       echo "$li $bspec $provides" >> "$pkgs_out"
 
       # todo: find better way to inform
-      echo -ne "\t$COLOR_YELLOW" >&2
-      [[ $li -lt 10 ]] && echo -n " " >&2
-      [[ $li -lt 100 ]] && echo -n " " >&2
-      echo -e "$li $bname$COLOR_OFF" >&2
+      # echo -ne "\t$COLOR_YELLOW" >&2
+      # [[ $li -lt 10 ]] && echo -n " " >&2
+      # [[ $li -lt 100 ]] && echo -n " " >&2
+      # echo -e "$li $bname$COLOR_OFF" >&2
 
       cpkg_bnames+=("$bname")
       cpkg_bspecs+=("$bspec")
@@ -510,10 +510,10 @@ taskFinalDepends() {
         echo "$c_li $c_bspec $c_provides" >> "$pkgs_out"
 
         # todo: find better way to inform
-        echo -ne "\t$COLOR_YELLOW" >&2
-        [[ $c_li -lt 10 ]] && echo -n " " >&2
-        [[ $c_li -lt 100 ]] && echo -n " " >&2
-        echo -e "$c_li $c_bname$COLOR_OFF" >&2
+        # echo -ne "\t$COLOR_YELLOW" >&2
+        # [[ $c_li -lt 10 ]] && echo -n " " >&2
+        # [[ $c_li -lt 100 ]] && echo -n " " >&2
+        # echo -e "$c_li $c_bname$COLOR_OFF" >&2
 
         j=$(( $j + 1 ))
 
@@ -525,10 +525,10 @@ taskFinalDepends() {
         retutn 1
       else
         # todo: find better way to inform
-        echo -ne "\t$COLOR_YELLOW" >&2
-        [[ $c_li -lt 10 ]] && echo -n " " >&2
-        [[ $c_li -lt 100 ]] && echo -n " " >&2
-        echo -e "$(( $i + $j + 1)) $bname$COLOR_OFF" >&2
+        # echo -ne "\t$COLOR_YELLOW" >&2
+        # [[ $c_li -lt 10 ]] && echo -n " " >&2
+        # [[ $c_li -lt 100 ]] && echo -n " " >&2
+        # echo -e "$(( $i + $j + 1)) $bname$COLOR_OFF" >&2
 
         i=$(( $i + $j ))
         p_level="$pp_level"
@@ -554,10 +554,10 @@ taskFinalDepends() {
     echo "$li $bspec $provides" >> "$pkgs_out"
 
     # todo: find better way to inform
-    echo -ne "\t" >&2
-    [[ $li -lt 10 ]] && echo -n " " >&2
-    [[ $li -lt 100 ]] && echo -n " " >&2
-    echo "$li $chain_dir" >&2
+    # echo -ne "\t" >&2
+    # [[ $li -lt 10 ]] && echo -n " " >&2
+    # [[ $li -lt 100 ]] && echo -n " " >&2
+    # echo "$li $chain_dir" >&2
 
   done #? /main
 

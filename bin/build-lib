@@ -388,9 +388,9 @@ buildInit() {
 
   # fixme: ugly
   # fixme: test mode
-  # info buildInit "--- test mode ---"
-  guestClearFHS
-  guestCreateFHS
+  info buildInit "--- test mode ---"
+  # guestClearFHS
+  # guestCreateFHS
 }
 
 # build task: buildTask <task>
@@ -399,43 +399,44 @@ buildTask() {
   local bspecs
 
   # fixme: test mode
-  # info "buildTask /$task/" "... taskInit skipped ..."
-  taskInit $task
-  bspecs=$(taskReqs $task)
+  info "buildTask /$task/" "... taskInit skipped ..."
+  # taskInit $task
+  # bspecs=$(taskReqs $task)
 
   # fixme: test mode
-  # info "buildTask /$task/" "... breqAddNode skipped ..."
-  local retcode last_package
-  for bs in ${bspecs[@]}; do
-    last_package=$(breqAddNode 0 "$bs" "" "$task")
-    retcode=$?
-    [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
-    echo "" # instead [ OK ]
-  done
+  info "buildTask /$task/" "... breqAddNode skipped ..."
+  # local retcode last_package
+  # for bs in ${bspecs[@]}; do
+  #   last_package=$(breqAddNode 0 "$bs" "" "$task")
+  #   retcode=$?
+  #   [[ $retcode -gt 0 ]] && error 1 EDEPEND "failed to get depended package: $(bspecName $last_package)"
+  #   echo "" # instead [ OK ]
+  # done
 
   # fixme: test mode
   # info "buildTask /$task/" "... taskSumVReq skipped ..."
+  [[ -f "$BREQ_DIR/$task/$BREQ_FLATTEN_RW" ]] && rm -f "$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
   info $task "versions ..."
   taskSumVreq "$task" "$BREQ_FLATTEN" "$BREQ_FLATTEN_RW"
 
   # fixme: test mode
   # info "buildTask /$task/" "packages (1/4): ... taskFinalDepends skipped ..."
-  # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS"
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS"
   info $task "packages (1/4): packages list ..."
   taskFinalDepends "$task" "$BREQ_FLATTEN_RW" "$BREQ_PKGS"
   [[ $? -gt 0 ]] && error 1 FDEPS "finalization of depends failed"
 
   # fixme: test mode
   # info "buildTask /$task/" "packages (1/4): ... taskUnalias skipped ..."
-  # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_UNALIAS" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_UNALIAS"
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_UNALIAS" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_UNALIAS"
   info $task "packages (2/4): solving virtuals ..."
   taskUnalias "$task" "$BREQ_PKGS" "$BREQ_PKGS_UNALIAS"
-  # taskUnalias "$task" ".packages-sample" ".packages-sample-rw"
   [[ $? -gt 0 ]] && error 1 FDEPS "solving virtuals failed"
 
   # todo: is actually needed
   # fixme: test mode
   # info "buildTask /$task/" "packages (3/4): ... taskSumVreq skipped ..."
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_RW" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_RW"
   info $task "packages (3/4): making list ..."
   taskSumVreq "$task" "$BREQ_PKGS_UNALIAS" "$BREQ_PKGS_RW"
   [[ $? -gt 0 ]] && error 1 FDEPS "cleaning of depends failed"
@@ -443,8 +444,7 @@ buildTask() {
   # fixme: test mode
   # info "buildTask /$task/" "packages (4/4): ... taskClearDepends skipped ..."
   info $task "packages (4/4): cleaning list ..."
-  # cp "$BREQ_DIR/$task/$BREQ_PACKAGES" "$BREQ_DIR/$task/$BREQ_PACKAGES_RW"
-  # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_CLR" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_CLR"
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_CLR" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_CLR"
   taskClearDepends "$task" "$BREQ_PKGS_RW" "$BREQ_PKGS_CLR"
   [[ $? -gt 0 ]] && error 1 FDEPS "cleaning of depends failed"
 }
