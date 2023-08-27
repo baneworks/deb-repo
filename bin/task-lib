@@ -39,10 +39,10 @@ taskMakeFHS() {
 
   # fixme: test mode
   # [[ -d "$btree" ]] && rm -rf "$btree"
-  # mkdir -p "$btree/$1"
+  mkdir -p "$btree/$1"
   # touch "$btree/$1/.flatten"
   # touch "$btree/$1/.flatten-rw"
-  touch "$btree/$1/.packages"
+  # touch "$btree/$1/.packages"
 }
 
 # todo: rewrite & add abitilty to change working mode [docker | local]
@@ -55,7 +55,7 @@ taskClearFHS() {
 
   # fixme: test mode
   dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
-  # [[ -d "$btree" ]] && rm -rf "$btree"
+  [[ -d "$btree" ]] && rm -rf "$btree"
 }
 
 # todo: refactor
@@ -69,16 +69,16 @@ taskInit() {
      [ -d $(guestCreateFHS  "tmp" $task) ]
   then
     # fixme: test mode
-    info "taskInit /$task/" "... taskClearFHS skipped ..."
-    # info $task "dirs ..."
-    # taskClearFHS $task
+    # info "taskInit /$task/" "... taskClearFHS skipped ..."
+    info $task "dirs ..."
+    taskClearFHS $task
   fi
 
   # fixme: test mode
-  info "taskInit /$task/" "... sources skipped ..."
-  # taskMakeFHS $task
-  # info $task "sources ..."
-  # [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
+  # info "taskInit /$task/" "... sources skipped ..."
+  taskMakeFHS $task
+  info $task "sources ..."
+  [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
 }
 
 # get task dcs filename: taskDsc <task>
