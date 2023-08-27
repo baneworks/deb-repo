@@ -6,10 +6,15 @@
 
 # region #! globals
 
-#! file related
+#! flatten file related
 BREQ_FLATTEN=".flatten"
 BREQ_FLATTEN_RW=".flatten-rw"
-BREQ_PACKAGES=".packages"
+
+#! packages file related
+BREQ_PKGS=".packages"
+BREQ_PKGS_UNALIAS=".packages-unaliased"
+BREQ_PKGS_RW=".packages-rw"
+BREQ_PKGS_CLR=".packages-clr"
 
 #! depends parsing related
 CYC_MAX_DEPTH=200 # limit for cyclic processing
@@ -153,9 +158,11 @@ taskReqs() {
 #! I'm not sure. So, for now, consider as a bug
 #
 # @example
-#    $(taskSumVReq <task>)
+#    $(taskSumVReq <task> <in> <out>)
 #
 # @arg `task` a build task.
+# @arg in a name `flatten` file to read from
+# @arg out a name of result file
 #
 # @exitcode 0 on success
 # @exitcode 1 on failure
@@ -163,15 +170,17 @@ taskReqs() {
 # @see [Vreq rewrite](./README.md#version-requrinments)
 taskSumVreq() {
   local task="$1"
+  local flatten="$BREQ_DIR/$task/$2"
+  local flatten_rw="$BREQ_DIR/$task/$3"
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
-  local flatten="$BREQ_DIR/$task/$BREQ_FLATTEN"
-  local flatten_rw="$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
+  local comment_rg='s/^\(#.*\)$'
   local skip
-
-  info $task "versions ..."
 
   mapfile -t lines < "$flatten"
   for ((i=0; i<${#lines[@]}; ++i)); do #? i for lines
+    local comment_line=$(sed -n "$comment_rg/\1/p" <<< "$line")
+    [[ -n $comment_line ]] && echo "$comment_line" >> "$flatten_rw"
+
     unset src_bspec src_bname src_bver
     unset dst_bspec dst_bname dst_bver
     unset enodes vreqs rw_bver pnode_bver
@@ -324,15 +333,87 @@ taskMakeChain() {
   echo "${chain[@]}"
 }
 
+# fixme: slooow
+# todo: remode j-for on all lines to lines just matche provider
+# @description Function to unalias virtual packages to its providers.
+#   Actually we need to remove already statisfied alias and preserve
+#   unsatisfied virtuals.
+#
+# @example
+#    $(taskSumVReq <task> <in> <out>)
+#
+# @arg `task` a build task.
+# @arg in a name `flatten` file to read from
+# @arg out a name of result file
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+#
+# @see [Vreq rewrite](./README.md#version-requrinments)
+taskUnalias() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local pkgs_out="$BREQ_DIR/$task/$3"
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+  local comment_rg='s/^\(#.*\)$'
+  local skip
+
+  mapfile -t lines < "$pkgs_in"
+
+  local skip
+  for ((i=0; i<${#lines[@]}; ++i)); do #? i-lines
+    [[ " ${skip[*]} " == *" $i "* ]] && continue
+
+    local comment_line=$(sed -n 's/^\(#.*\)$/\1/p' <<< ${lines[$i]})
+    if [[ -n "$comment_line" ]]; then
+      skip+=($i)
+      continue
+    fi
+
+    local i_level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
+    local i_bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    local i_provides=$(echo "${lines[$i]}" | sed -n "$regexp/\3/p")
+
+    [[ -z "$i_provides" ]] && continue
+    skip+=($i) # provider entry point found - no need to substitute in future
+
+    for p_bspec in ${i_provides[@]}; do #? provides
+      local p_bname=$(bspecName "$p_bspec")
+      local match=($(cat "$pkgs_in" | grep -n '^[0-9]\+\s'"$p_bname"'\/\s\?.*$' | sed -n 's/^\([0-9]\+\):.*$/\1/p'))
+
+      for ln in ${match[@]}; do
+        local j=$(( $ln - 1 ))
+        [[ $i -eq $j || " ${skip[*]} " == *" $j "* ]] && continue
+
+        lines[$j]="# virtual: ${lines[$j]}"
+        skip+=($j)
+      done
+
+    done #? /provides
+
+    skip+=($i)
+
+  done #? /i-lines
+
+  for ((i=0; i<${#lines[@]}; ++i)); do #? i-lines
+    echo "${lines[$i]}" >> "$pkgs_out"
+  done
+
+  return 0
+}
+
+# fixme: slooow
 # todo: cover with tests
 # @description Function to finalize all depends to flat list.
 #   Parses `.flatten`, unspin cycles and return ready to install
 #   packages list with suitable version specification.
 #
 # @example
-#    $(taskFinalDepends <task>)
+#    $(taskFinalDepends <task> <in> <out>)
 #
 # @arg `task` a build task.
+# @arg in a name `flatten` file to read from
+# @arg out a name of result file
 #
 # @exitcode 0 on success
 # @exitcode 1 on failure
@@ -340,7 +421,8 @@ taskMakeChain() {
 # @see [depends parsing](./README.md#-depends-parsing)
 taskFinalDepends() {
   local task="$1"
-  local pkgs_out="$BREQ_DIR/$task/$BREQ_PACKAGES"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local pkgs_out="$BREQ_DIR/$task/$3"
 
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
 
@@ -353,15 +435,14 @@ taskFinalDepends() {
   local prev_bname
   local p_level=0 pp_level=0
 
-  info $task "packages ..."
-
-  readarray -t lines < "$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
+  readarray -t lines < "$pkgs_in"
 
   for ((i=0; i<"${#lines[@]}"; ++i)); do #? main for
 
     local li=$(( $i + 1 ))
     local level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
     local bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    local provides=$(echo "${lines[$i]}" | sed -n "$regexp/\3/p")
     local bname=$(bspecName "$bspec")
 
     #? skipping if already added
@@ -390,15 +471,16 @@ taskFinalDepends() {
 
     #? --- cyclic ---
     if [[ -f "$BREQ_DIR/$task/$chain_dir/.cyclic" ]]; then
-
       pp_level="$p_level"
 
       prev_cdir="$chain_dir"
       prev_chain=("${chain[@]}")
 
-      # declare -a cyclic=($bname)
       local cycle_bnames=($bname)
       local cycle_bspecs=($bspec)
+
+      echo "# cycle" >> "$pkgs_out"
+      echo "$li $bspec $provides" >> "$pkgs_out"
 
       # todo: find better way to inform
       echo -ne "\t$COLOR_YELLOW" >&2
@@ -414,6 +496,7 @@ taskFinalDepends() {
         local c_li=$(( $i + $j + 1 ))
         local c_level=$(echo "${lines[$c_li]}" | sed -n "$regexp/\1/p")
         local c_bspec=$(echo "${lines[$c_li]}" | sed -n "$regexp/\2/p")
+        local c_provides=$(echo "${lines[$c_li]}" | sed -n "$regexp/\3/p")
         local c_bname=$(bspecName "$c_bspec")
 
         [[ $level -ge $c_level || $j -ge $CYC_MAX_DEPTH ]] && break
@@ -423,6 +506,8 @@ taskFinalDepends() {
         cycle_bspecs+=("$c_bspec")
         cpkg_bnames+=("$c_bname")
         cpkg_bspecs+=("$c_bspec")
+
+        echo "$c_li $c_bspec $c_provides" >> "$pkgs_out"
 
         # todo: find better way to inform
         echo -ne "\t$COLOR_YELLOW" >&2
@@ -455,7 +540,9 @@ taskFinalDepends() {
         chain_dir="${chain[*]}"
         chain_dir=${chain_dir// /'/'}
 
-        echo "${cycle_bspecs[@]}" >> "$pkgs_out"
+        # echo "$li-$c_li ${cycle_bspecs[@]}" >> "$pkgs_out"
+        echo "# /cycle" >> "$pkgs_out"
+
         continue
       fi
 
@@ -464,7 +551,7 @@ taskFinalDepends() {
     pkg_bnames+=($bname)
     p_level="$level"
 
-    echo "$bspec" >> "$pkgs_out"
+    echo "$li $bspec $provides" >> "$pkgs_out"
 
     # todo: find better way to inform
     echo -ne "\t" >&2
@@ -473,6 +560,92 @@ taskFinalDepends() {
     echo "$li $chain_dir" >&2
 
   done #? /main
+
+  return 0
+}
+
+# fixme: slooow
+# todo: this can be done in one pass with look-ahead regexp
+# @description Function to do some cleanup on depends.
+#
+# @example
+#    $(taskClearDepends <task> <in> <out>)
+#
+# @arg `task` a build task.
+# @arg in a name `flatten` file to read from
+# @arg out a name of result file
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+taskClearDepends() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local pkgs_out="$BREQ_DIR/$task/$3"
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+  local comment_rg='s/^#.*$//'
+
+  mapfile -t lines < "$pkgs_in"
+
+  #? collecting enodes & vreqs
+  local en_specs en_names
+  local vr_specs vr_names
+  local skip
+  for ((i=0; i<${#lines[@]}; ++i)); do
+    # comments
+    local comment_line=$(sed -n 's/^\(#.*\)$/\1/p' <<< ${lines[$i]})
+    if [[ -n "$comment_line" ]]; then
+      echo "$comment_line" >> "$pkgs_out"
+      skip+=($i)
+      continue
+    fi
+
+    [[ " ${skip[*]} " == *" $i "* ]] && continue
+
+    local i_level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
+    local i_bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    # local i_provides=$(echo "${lines[$i]}" | sed -n "$regexp/\3/p")
+    local i_bname=$(bspecName "$i_bspec")
+    local i_bver=$(bspecVersionHR "$i_bspec")
+
+    local search_fspec="true"
+    for ((j=0; j<${#lines[@]}; ++j)); do #? j
+      [[ " ${skip[*]} " == *" $j "* ]] && continue
+
+      local j_bspec=$(echo "${lines[$j]}" | sed -n "$regexp/\2/p")
+      local j_bname=$(bspecName "$j_bspec")
+
+      [[ "$j_bname" != "$i_bname" ]] && continue
+
+      if [[ -n $search_fspec ]]; then
+        local full_spec=""
+        for ((k=0; k<${#lines[@]}; ++k)); do #? k
+          [[ " ${skip[*]} " == *" $k "* ]] && continue
+          local k_bspec=$(echo "${lines[$k]}" | sed -n "$regexp/\2/p")
+          local k_bname=$(bspecName "$k_bspec")
+          if [[ "$k_bname" == "$j_bname" ]]; then
+            if [[ -n "$k_bname" ]]; then
+              if [[ -z "$full_spec" ]]; then
+                full_spec="$k_bspec"
+                unset search_fspec
+                break
+              fi
+            fi
+          fi
+        done
+        [[ -z "$full_spec" || $k -ge ${#lines[@]} ]] && return 1
+      fi
+
+      local j_bver=$(bspecVersionHR "$j_bspec")
+
+      lines[$j]="$full_spec"
+      skip+=($j)
+
+    done #? j
+
+    echo "$i_level $full_spec">> "$pkgs_out"
+    skip+=($i)
+
+  done
 
   return 0
 }
