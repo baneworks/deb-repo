@@ -39,9 +39,9 @@ bash-builder:
         ✔ cleanups @done(23-08-26 23:41)
         ✔ strategy @done(23-08-26 23:41)
           ✔ cycles, short to longer @done(23-08-26 23:41)
-        ☐ installed
-          ☐ filer
-          ☐ with versions
+        ✔ installed @done(23-08-28 02:30)
+          ✔ filer @done(23-08-28 02:30)
+          ✔ with versions @done(23-08-28 02:30)
         ☐ dload
         ☐ install
       ☐ build
@@ -84,7 +84,7 @@ bash-builder:
       ✔ seen_before rewrite @done(23-08-22 09:32)
       ✔ versions req '>' '<' case @done(23-08-25 02:43)
       ☐ dverCmp left <-> right op change
-      ☐ if root node hasn't deps - it not added to .flatten
+      ✔ if root node hasn't deps - it not added to .flatten @done(23-08-28 02:30)
     ☐ document
       ☐ bspec-lib
       ☐ build-lib

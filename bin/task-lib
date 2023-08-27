@@ -16,6 +16,11 @@ BREQ_PKGS_UNALIAS=".packages-unaliased"
 BREQ_PKGS_RW=".packages-rw"
 BREQ_PKGS_CLR=".packages-clr"
 
+#! install file related
+BREQ_PKGS_INST=".install"
+BREQ_PKGS_INST_FLT=".install-flt"
+BREQ_PKGS_INST_CRL=".install-clr"
+
 #! depends parsing related
 CYC_MAX_DEPTH=200 # limit for cyclic processing
 
@@ -644,6 +649,120 @@ taskClearDepends() {
 
     echo "$i_level $full_spec">> "$pkgs_out"
     skip+=($i)
+
+  done
+
+  return 0
+}
+
+# todo: rewrite vreqs to version
+# @description Function to generate .
+#
+# @example
+#    $(taskFilterInstalled <task> <in> <out>)
+#
+# @arg `task` a build task.
+# @arg in a file to read from
+# @arg out a name of result file
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+taskFilterInstalled() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local pkgs_out="$BREQ_DIR/$task/$3"
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+  local comment_rg='s/^#.*$//'
+
+  mapfile -t lines < "$pkgs_in"
+
+  #? collecting enodes & vreqs
+  for ((i=0; i<${#lines[@]}; ++i)); do
+
+    local comment_line=$(sed -n 's/^\(#.*\)$/\1/p' <<< ${lines[$i]})
+    if [[ -n "$comment_line" ]]; then
+      echo "$comment_line" >> "$pkgs_out"
+      continue
+    fi
+
+    local level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
+    local bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+    local bname=$(bspecName "$bspec")
+    local bver=$(bspecVersionHR "$bspec")
+
+    log=$(dockerDpkgStatus "$bname")
+    if [[ $? -eq 0 ]]; then #? not installed
+      local vstr=$(sed -n 's/Version:\s\?\(.*\)$/\1/p' <<< $log)
+      vstr=$(tr -cd '[:print:]' <<< "$vstr")
+      if [[ $? -eq 0 ]]; then #? installed package can be greater then in spec
+        local vreq="$bver"
+        [[ -z $(dverIsVReq "$bver") ]] && vreq=">= $bver"
+        [[ -z $(dverMatch "$vreq" "$vstr") ]] && return 1 # version mismatch
+        echo "# installed: ${lines[$i]}" >> "$pkgs_out"
+        continue
+      fi
+    fi
+
+    echo "${lines[$i]}" >> "$pkgs_out"
+    # break
+
+  done
+
+  return 0
+}
+
+# @description Function to generate .
+#
+# @example
+#    $(taskMkInstall <task> <in> <out>)
+#
+# @arg `task` a build task.
+# @arg in a file to read from
+# @arg out a name of result file
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+taskMkInstall() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local pkgs_out="$BREQ_DIR/$task/$3"
+
+  local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
+  local comment_rg='s/^#.*$//'
+  local cstart_rg='s/^\(# cycle\)$/\1/p'
+  local cend_rg='s/^\(# \/cycle\)$/\1/p'
+
+  mapfile -t lines < "$pkgs_in"
+
+  for ((i=0; i<${#lines[@]}; ++i)); do
+    local bspec
+    if [[ -n $(sed -n "$comment_rg" <<< ${lines[$i]}) ]] &&
+       [[ -z $(sed -n "$cstart_rg" <<< ${lines[$i]}) ]] &&
+       [[ -z $(sed -n "$cend_rg" <<< ${lines[$i]}) ]]
+    then
+      continue
+    else
+      bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+      echo "$(( $i + 1 )) bs=$bspec" >&2
+    fi
+
+    if [[ -n $(sed -n "$cstart_rg" <<< ${lines[$i]}) ]]; then
+      local cycle in_cycle="true"
+      while [[ -n $in_cycle ]]; do
+        i=$(( $i + 1 ))
+        [[ -n $(sed -n "$cstart_rg" <<< ${lines[$i]}) || $i -gt ${#lines[@]} ]] && return 1
+        if [[ -n $(sed -n "$cend_rg" <<< ${lines[$i]}) ]]; then
+          unset in_cycle
+          break
+        elif [[ -z $(sed -n "$comment_rg" <<< ${lines[$i]}) ]]; then
+          bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
+          [[ -n "$bspec" ]] && cycle+=("$bspec")
+        fi
+      done
+      [[ ${#cycle[@]} -gt 0 ]] && echo "${cycle[@]}" >> "$pkgs_out"
+    fi
+
+    [[ -n "$bspec" ]] && echo "$bspec" >> "$pkgs_out"
 
   done
 

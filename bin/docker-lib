@@ -93,6 +93,15 @@ dockerAptCache() {
   echo "$retval"
 }
 
+# excute apt-get sources: dockerAptSources <pkg>
+dockerDpkgStatus() {
+  local retval pkg="$1"
+  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "dpkg -s $pkg 2> /dev/null | grep -E '^Status|^Version'; exit $?")
+  [[ -z "$retval" ]] && return 1
+  echo "$retval"
+  return 0
+}
+
 # create dir inside repo: dockerMakeDir <dir>
 dockerMakeDir() {
   dockerDirExec "" mkdir $@
