@@ -688,30 +688,59 @@ taskFilterInstalled() {
     local level=$(echo "${lines[$i]}" | sed -n "$regexp/\1/p")
     local bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
     local bname=$(bspecName "$bspec")
-    local bver=$(bspecVersionHR "$bspec")
+    local bver=$(bspecVersion $bspec) # fixme: bspecVersion + bspecVersionHR convert to one
 
-    log=$(dockerDpkgStatus "$bname")
-    if [[ $? -eq 0 ]]; then #? not installed
-      local vstr=$(sed -n 's/Version:\s\?\(.*\)$/\1/p' <<< $log)
-      vstr=$(tr -cd '[:print:]' <<< "$vstr")
-      if [[ $? -eq 0 ]]; then #? installed package can be greater then in spec
-        local vreq="$bver"
-        [[ -z $(dverIsVReq "$bver") ]] && vreq=">= $bver"
-        [[ -z $(dverMatch "$vreq" "$vstr") ]] && return 1 # version mismatch
-        echo "# installed: ${lines[$i]}" >> "$pkgs_out"
-        continue
-      fi
+    # fixme: a hack
+    if [[ "${bver:0:1}" == '=' ]]; then
+      bver="${bver:1}"
+    elif [[ "${bver:0:1}" == '<' || "${bver:0:1}" == '>' ]]; then
+      bver=$(bspecVersionHR $bspec)
     fi
 
-    echo "${lines[$i]}" >> "$pkgs_out"
-    # break
+    # echo "--- $level $bspec ($bname/$bver) ---" >&2
+    # # echo $(bspecVersionHR 'perl-base/5.32.1-4+deb11u2') >&2
+
+    # bspec='debianutils/>=1.8'
+    # # bspec='perl-base/5.32.1-4+deb11u2'
+    # bname=$(bspecName "$bspec")
+    # bver=$(bspecVersionHR $bspec)
+    # [[ -z "$bver" ]] && bver=$(bspecVersion $bspec)
+    # echo "--- $level $bspec ($bname/$bver) ---" >&2
+    # [[ $i -ge 10 ]] && return 1
+
+    log=$(dockerDpkgStatus "$bname")
+    if [[ $? -eq 0 ]]; then #? installed
+      local vstr=$(sed -n 's/Version:\s\?\(.*\)$/\1/p' <<< $log)
+      vstr=$(tr -cd '[:print:]' <<< "$vstr")
+      local vreq="$bver"
+      [[ -z $(dverIsVReq "$bver") ]] && vreq=">= $bver"
+      [[ -z $(dverMatch "$vreq" "$vstr") ]] && return 1 # version mismatch
+      echo "# installed: ${lines[$i]}" >> "$pkgs_out"
+      continue
+    elif [[ "${bver:0:1}" == '>' || "${bver:0:1}" == '<' ]]; then #? 'libc6/>= 2.14' => check avail version and => 'libc6'
+      # avaible versions
+      local vstr="$(dockerAptCache "$bname")"
+      [[ $? -gt 0 ]] && return 1
+      local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$vstr")
+      local va
+      for sl in ${vstr//"\n"/ }; do
+        sl=$(tr -cd '[:print:]' <<< "$sl")
+        va+=("$sl")
+      done
+      # which version is needed?
+      local idx=$(breqWhichVersion "$bver" "${va[@]}")
+      [[ $? -gt 0 ]] && return 1 #! no suitable version
+      bver="${va[$idx]}" # newer matched version
+    fi
+
+    echo "$level $bname/$bver" >> "$pkgs_out"
 
   done
 
   return 0
 }
 
-# @description Function to generate .
+# @description Function to generate install script.
 #
 # @example
 #    $(taskMkInstall <task> <in> <out>)
@@ -743,7 +772,7 @@ taskMkInstall() {
       continue
     else
       bspec=$(echo "${lines[$i]}" | sed -n "$regexp/\2/p")
-      echo "$(( $i + 1 )) bs=$bspec" >&2
+      # echo "$(( $i + 1 )) bs=$bspec" >&2
     fi
 
     if [[ -n $(sed -n "$cstart_rg" <<< ${lines[$i]}) ]]; then

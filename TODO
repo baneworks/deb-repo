@@ -85,6 +85,8 @@ bash-builder:
       ✔ versions req '>' '<' case @done(23-08-25 02:43)
       ☐ dverCmp left <-> right op change
       ✔ if root node hasn't deps - it not added to .flatten @done(23-08-28 02:30)
+      ☐ bspecVersionHR 'perl-base/5.32.1-4+deb11u2' => ""
+      ☐ bspecVersion & bspecVersionHR to one
     ☐ document
       ☐ bspec-lib
       ☐ build-lib
