@@ -102,6 +102,17 @@ dockerDpkgStatus() {
   return 0
 }
 
+# copy file to guest FS: dockerCopy <tag> <task> <file>
+dockerCopy() {
+  local retval tag="$1" task="$2"
+  local file=(${3//'/'/ })
+  file="${file[-1]}"
+  retval=$(docker cp "$3" "${DC_NAME}:${DC_REPO}/$(tagValue $tag)/${task}/${file}")
+  local errc=$?
+  echo "$retval"
+  return $errc
+}
+
 # create dir inside repo: dockerMakeDir <dir>
 dockerMakeDir() {
   dockerDirExec "" mkdir $@

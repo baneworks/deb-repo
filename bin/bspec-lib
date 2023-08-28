@@ -17,4 +17,18 @@ bspecVersionHR() {
   local bver=(${1//'/'/ })
   echo $(sed -n 's/\([<>=]\+\)/\1 /pg' <<< "${bver[1]}")
 }
+
+# return filename from bspec: bspecFile <breq_spec> [arch]
+bspecFile() {
+  local bname=(${1//'/'/ })
+  local bver="${bname[1]}"
+  bname="${bname[0]}"
+
+  local arch="$2"
+  [[ -z "$arch" ]] && arch="amd64"
+
+  bver=${bver//':'/'%3a'}
+
+  echo "$bname_$bver_$arch.deb"
+}
 # endregion

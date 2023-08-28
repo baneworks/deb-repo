@@ -20,6 +20,8 @@ BREQ_PKGS_CLR=".packages-clr"
 BREQ_PKGS_INST=".install"
 BREQ_PKGS_INST_FLT=".install-flt"
 BREQ_PKGS_INST_CRL=".install-clr"
+BREQ_PKGS_DLSH="download.sh"
+BREQ_PKGS_ISH="install.sh"
 
 #! depends parsing related
 CYC_MAX_DEPTH=200 # limit for cyclic processing
@@ -697,17 +699,6 @@ taskFilterInstalled() {
       bver=$(bspecVersionHR $bspec)
     fi
 
-    # echo "--- $level $bspec ($bname/$bver) ---" >&2
-    # # echo $(bspecVersionHR 'perl-base/5.32.1-4+deb11u2') >&2
-
-    # bspec='debianutils/>=1.8'
-    # # bspec='perl-base/5.32.1-4+deb11u2'
-    # bname=$(bspecName "$bspec")
-    # bver=$(bspecVersionHR $bspec)
-    # [[ -z "$bver" ]] && bver=$(bspecVersion $bspec)
-    # echo "--- $level $bspec ($bname/$bver) ---" >&2
-    # [[ $i -ge 10 ]] && return 1
-
     log=$(dockerDpkgStatus "$bname")
     if [[ $? -eq 0 ]]; then #? installed
       local vstr=$(sed -n 's/Version:\s\?\(.*\)$/\1/p' <<< $log)
@@ -740,7 +731,7 @@ taskFilterInstalled() {
   return 0
 }
 
-# @description Function to generate install script.
+# @description Function to generate install list.
 #
 # @example
 #    $(taskMkInstall <task> <in> <out>)
@@ -794,6 +785,86 @@ taskMkInstall() {
     [[ -n "$bspec" ]] && echo "$bspec" >> "$pkgs_out"
 
   done
+
+  return 0
+}
+
+# @description Function to generate download script.
+#
+# @example
+#    $(taskDload <task> <in> <out>)
+#
+# @arg `task` a build task.
+# @arg in a file to read from
+# @arg out a name of result file (without task name)
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+taskDload() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local pkgs_out="$BREQ_DIR/$task/$3"
+  local shebang="#!/usr/bin/env bash\n"
+  local cmd_start="res=\`"
+  local cmd_end="\`"
+  local mid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
+  local end="\nexit 0"
+  echo -e "$shebang" >> "$pkgs_out"
+  mapfile -t lines < "$pkgs_in"
+  for ((i=0; i<${#lines[@]}; ++i)); do
+    # fixme: test mode
+    [[ "${lines[$i]}" == 'linux-libc-dev/' ]] && continue
+    [[ "${lines[$i]}" == 'debconf-2.0/' ]] && continue
+    [[ "${lines[$i]}" == 'perlapi-5.32.0/' ]] && continue
+
+    local pa=(${lines[$i]})
+    if [[ ${#pa[@]} -gt 1 ]]; then #? cycle
+      echo -e "# cycle\n" >> "$pkgs_out"
+      for ((j=0; j<${#pa[@]}; ++j)); do
+        local bname=(${pa[$j]//'/'/ })
+        local bver="${bname[1]}"
+        bname="${bname[0]}"
+        if [[ -z "$bver" ]]; then
+          echo "apt-get download \"$bname\"" >> "$pkgs_out"
+        else
+          echo "apt-get download \"$bname=$bver\"" >> "$pkgs_out"
+        fi
+        echo "$mid" >> "$pkgs_out"
+        echo "" >> "$pkgs_out"
+      done
+      echo -e "# /cycle\n" >> "$pkgs_out"
+    else #? pkg
+      local bname=(${pa[0]//'/'/ })
+      local bver="${bname[1]}"
+      bname="${bname[0]}"
+      if [[ -z "$bver" ]]; then
+        echo "${cmd_start}apt-get download \"$bname\"${cmd_end}" >> "$pkgs_out"
+      else
+        echo "${cmd_start}apt-get download \"$bname=$bver\"${cmd_end}" >> "$pkgs_out"
+      fi
+      echo "$mid" >> "$pkgs_out"
+      echo "" >> "$pkgs_out"
+    fi
+  # fixme: test mode
+  # [[ $i -gt 3 ]] && break
+  done
+  echo -e "$end" >> "$pkgs_out"
+
+  local res
+  local script=(${pkgs_out//'/'/ })
+  script="${script[-1]}"
+
+  #? copy script
+  res=$(dockerMakeDir "$(tagValue sh)/${task}/")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  res=$(dockerMakeDir "$(tagValue dbin)/${task}/")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  res=$(dockerCopy "sh" "$task" "$pkgs_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+
+  #? executing script
+  res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$script")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
 
   return 0
 }
