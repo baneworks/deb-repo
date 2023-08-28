@@ -22,6 +22,8 @@ BREQ_PKGS_INST_FLT=".install-flt"
 BREQ_PKGS_INST_CRL=".install-clr"
 BREQ_PKGS_DLSH="download.sh"
 BREQ_PKGS_ISH="install.sh"
+BREQ_PKGS_USH="uninstall.sh"
+BREQ_PKGS_LSH="list.sh"
 
 #! depends parsing related
 CYC_MAX_DEPTH=200 # limit for cyclic processing
@@ -708,7 +710,7 @@ taskFilterInstalled() {
       [[ -z $(dverMatch "$vreq" "$vstr") ]] && return 1 # version mismatch
       echo "# installed: ${lines[$i]}" >> "$pkgs_out"
       continue
-    elif [[ "${bver:0:1}" == '>' || "${bver:0:1}" == '<' ]]; then #? 'libc6/>= 2.14' => check avail version and => 'libc6'
+    elif [[ -z $bver || "${bver:0:1}" == '>' || "${bver:0:1}" == '<' ]]; then #? 'libc6/>= 2.14' => check avail version and => 'libc6'
       # avaible versions
       local vstr="$(dockerAptCache "$bname")"
       [[ $? -gt 0 ]] && return 1
@@ -718,10 +720,14 @@ taskFilterInstalled() {
         sl=$(tr -cd '[:print:]' <<< "$sl")
         va+=("$sl")
       done
-      # which version is needed?
-      local idx=$(breqWhichVersion "$bver" "${va[@]}")
-      [[ $? -gt 0 ]] && return 1 #! no suitable version
-      bver="${va[$idx]}" # newer matched version
+      if [[ -z $bver ]]; then #? first availible ver
+        bver="${va[0]}" # newer matched version
+      else
+        # which version is needed?
+        local idx=$(breqWhichVersion "$bver" "${va[@]}")
+        [[ $? -gt 0 ]] && return 1 #! no suitable version
+        bver="${va[$idx]}" # newer matched version
+      fi
     fi
 
     echo "$level $bname/$bver" >> "$pkgs_out"
@@ -812,11 +818,6 @@ taskDload() {
   echo -e "$shebang" >> "$pkgs_out"
   mapfile -t lines < "$pkgs_in"
   for ((i=0; i<${#lines[@]}; ++i)); do
-    # fixme: test mode
-    [[ "${lines[$i]}" == 'linux-libc-dev/' ]] && continue
-    [[ "${lines[$i]}" == 'debconf-2.0/' ]] && continue
-    [[ "${lines[$i]}" == 'perlapi-5.32.0/' ]] && continue
-
     local pa=(${lines[$i]})
     if [[ ${#pa[@]} -gt 1 ]]; then #? cycle
       echo -e "# cycle\n" >> "$pkgs_out"
@@ -845,8 +846,6 @@ taskDload() {
       echo "$mid" >> "$pkgs_out"
       echo "" >> "$pkgs_out"
     fi
-  # fixme: test mode
-  # [[ $i -gt 3 ]] && break
   done
   echo -e "$end" >> "$pkgs_out"
 
@@ -865,6 +864,227 @@ taskDload() {
   #? executing script
   res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$script")
   [[ $? -gt 0 ]] && echo "$res" && return 1
+
+  return 0
+}
+
+# @description Function to generate install script.
+#
+# @example
+#    $(taskDebInstall <task> <in> <install> <uninstall>)
+#
+# @arg `task` a build task.
+# @arg `install` a name of install script
+# @arg `uninstall` a name of uninstall script
+#
+# @exitcode 0 on success
+# @exitcode 1 on failure
+taskDebInstall() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local ish_out="$BREQ_DIR/$task/$3"
+  local ush_out="$BREQ_DIR/$task/$4"
+  local lsh_out="$BREQ_DIR/$task/$4"
+
+  local shebang="#!/usr/bin/env bash\n"
+  local icmd_start="res=\`"
+  local icmd_end="\`"
+  local imid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
+  local iend="\nexit 0"
+  local ucmd_start="res=\`"
+  local ucmd_end="\`"
+  local umid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
+  local uend="\nexit 0"
+  local lcmd_start="file=\`"
+  local lcmd_end="\`"
+  local lmid='[[ -f "\$file" ]] || echo "\$file" && exit 1'
+  local lend="\nexit 0"
+
+  echo -e "$shebang" >> "$ish_out"
+  echo -e "$shebang" >> "$ush_out"
+  echo -e "$shebang" >> "$lsh_out"
+
+  mapfile -t lines < "$pkgs_in"
+  for ((i=0; i<${#lines[@]}; ++i)); do
+    local pa=(${lines[$i]})
+    if [[ ${#pa[@]} -gt 1 ]]; then #? cycle
+      echo "# cycle" >> "$ish_out"
+      echo "# cycle" >> "$ush_out"
+      echo "# cycle" >> "$lsh_out"
+      echo -n "${icmd_start}dpkg -i " >> "$ish_out"
+      echo -n "${ucmd_start}dpkg --purge " >> "$ush_out"
+      echo -n "${lcmd_start}" >> "$lsh_out"
+      for ((j=0; j<${#pa[@]}; ++j)); do
+        local fname=$(bspecFile ${pa[$j]})
+        local bname=$(bspecName ${pa[$j]})
+        [[ -z $fname || $? -gt 0 ]] && return 1
+        echo -n "${fname}" >> "$ish_out"
+        echo -n "${bname}" >> "$ush_out"
+        echo -n "${fname}" >> "$lsh_out"
+        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$ish_out"
+        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$ush_out"
+        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$lsh_out"
+      done
+      echo "${icmd_end}" >> "$ish_out"
+      echo "${ucmd_end}" >> "$ush_out"
+      echo "${lcmd_end}" >> "$lsh_out"
+      echo "${imid}" >> "$ish_out"
+      echo "${umid}" >> "$ush_out"
+      echo "${lmid}" >> "$lsh_out"
+      echo "# /cycle" >> "$ish_out"
+      echo "# /cycle" >> "$ush_out"
+      echo "# /cycle" >> "$lsh_out"
+    else #? pkg
+      local fname=$(bspecFile ${pa[0]})
+      local bname=$(bspecName ${pa[0]})
+      [[ -z $fname || $? -gt 0 ]] && return 1
+      echo "${icmd_start}dpkg -i ${fname}${icmd_end}" >> "$ish_out"
+      echo "${ucmd_start}dpkg --purge ${bname}${ucmd_end}" >> "$ush_out"
+      echo "${lcmd_start}${fname}${ucmd_end}" >> "$lsh_out"
+      echo "${imid}" >> "$ish_out"
+      echo "${umid}" >> "$ush_out"
+      echo "${lmid}" >> "$lsh_out"
+    fi
+  # fixme: test mode
+  # [[ $i -gt 3 ]] && break
+  done
+  echo -e "$iend" >> "$ish_out"
+  echo -e "$uend" >> "$ush_out"
+  echo -e "$lend" >> "$lsh_out"
+
+  local res
+  local iscript=(${ish_out//'/'/ }); iscript="${iscript[-1]}"
+  local uscript=(${ush_out//'/'/ }); uscript="${uscript[-1]}"
+  local lscript=(${lsh_out//'/'/ }); lscript="${lscript[-1]}"
+
+  # #? copy scripts
+  res=$(dockerCopy "sh" "$task" "$ish_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  res=$(dockerCopy "sh" "$task" "$ush_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  res=$(dockerCopy "sh" "$task" "$lsh_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+
+  # #? executing script
+  # checks downloaded files
+  res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$lscript")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  # install packages
+  # res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$iscript")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
+
+  return 0
+}
+
+taskDebInstallTest() {
+  local task="$1"
+  local pkgs_in="$BREQ_DIR/$task/$2"
+  local ish_out="$BREQ_DIR/$task/$3"
+  local ush_out="$BREQ_DIR/$task/$4"
+  local lsh_out="$BREQ_DIR/$task/$5"
+
+  local shebang="#!/usr/bin/env bash\n"
+
+  local icmd_start="res=\`"
+  local icmd_end="\`"
+  local imid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
+  local iend="\nexit 0"
+
+  local ucmd_start="res=\`"
+  local ucmd_end="\`"
+  local umid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
+  local uend="\nexit 0"
+
+  local lcmd_start="file=\`"
+  local lcmd_end="\`"
+  local lmid='[[ -f "\$file" ]] || echo "\$file" && exit 1'
+  local lend="\nexit 0"
+
+  echo -e "$shebang" >> "$ish_out"
+  echo -e "$shebang" >> "$ush_out"
+  echo -e "$shebang" >> "$lsh_out"
+
+  echo -n "${icmd_start}dpkg -i " >> "$ish_out"
+  echo -n "${ucmd_start}dpkg --purge " >> "$ush_out"
+
+  mapfile -t lines < "$pkgs_in"
+  for ((i=0; i<${#lines[@]}; ++i)); do
+    local pa=(${lines[$i]})
+    if [[ ${#pa[@]} -gt 1 ]]; then #? cycle
+      # echo "# cycle" >> "$ish_out"
+      # echo "# cycle" >> "$ush_out"
+      echo "# cycle" >> "$lsh_out"
+      # echo -n "${icmd_start}dpkg -i " >> "$ish_out"
+      # echo -n "${ucmd_start}dpkg --purge " >> "$ush_out"
+      echo -n "${lcmd_start}" >> "$lsh_out"
+      for ((j=0; j<${#pa[@]}; ++j)); do
+        local fname=$(bspecFile ${pa[$j]})
+        local bname=$(bspecName ${pa[$j]})
+        [[ -z $fname || $? -gt 0 ]] && return 1
+        echo -n " ${fname}" >> "$ish_out"
+        echo -n " ${bname}" >> "$ush_out"
+        echo -n "${fname}" >> "$lsh_out"
+        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$ish_out"
+        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$ush_out"
+        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$lsh_out"
+      done
+      echo " \\" >> "$ish_out"
+      echo " \\" >> "$ush_out"
+      echo "${lcmd_end}" >> "$lsh_out"
+      # echo "${imid}" >> "$ish_out"
+      # echo "${umid}" >> "$ush_out"
+      echo "${lmid}" >> "$lsh_out"
+      # echo "# /cycle" >> "$ish_out"
+      # echo "# /cycle" >> "$ush_out"
+      echo "# /cycle" >> "$lsh_out"
+    else #? pkg
+      local fname=$(bspecFile ${pa[0]})
+      local bname=$(bspecName ${pa[0]})
+      [[ -z $fname || $? -gt 0 ]] && return 1
+      # echo "${icmd_start}dpkg -i ${fname}${icmd_end}" >> "$ish_out"
+      # echo "${ucmd_start}dpkg --purge ${bname}${ucmd_end}" >> "$ush_out"
+      echo -n "${fname}" >> "$ish_out"
+      echo -n "${bname}" >> "$ush_out"
+      [[ $i -lt $(( ${#lines[@]} - 1 )) ]] && echo " \\" >> "$ish_out"
+      [[ $i -lt $(( ${#lines[@]} - 1 )) ]] && echo " \\" >> "$ush_out"
+      echo "${lcmd_start}${fname}${ucmd_end}" >> "$lsh_out"
+      # echo "${imid}" >> "$ish_out"
+      # echo "${umid}" >> "$ush_out"
+      echo "${lmid}" >> "$lsh_out"
+    fi
+  # fixme: test mode
+  # [[ $i -gt 3 ]] && break
+  done
+  echo "${icmd_end}" >> "$ish_out"
+  echo "${ucmd_end}" >> "$ush_out"
+
+  echo "${imid}" >> "$ish_out"
+  echo "${umid}" >> "$ush_out"
+
+  echo -e "$iend" >> "$ish_out"
+  echo -e "$uend" >> "$ush_out"
+  echo -e "$lend" >> "$lsh_out"
+
+  local res
+  local iscript=(${ish_out//'/'/ }); iscript="${iscript[-1]}"
+  local uscript=(${ush_out//'/'/ }); uscript="${uscript[-1]}"
+  local lscript=(${lsh_out//'/'/ }); lscript="${lscript[-1]}"
+
+  # #? copy scripts
+  res=$(dockerCopy "sh" "$task" "$ish_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  res=$(dockerCopy "sh" "$task" "$ush_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+  res=$(dockerCopy "sh" "$task" "$lsh_out")
+  [[ $? -gt 0 ]] && echo "$res" && return 1
+
+  # #? executing script
+  # checks downloaded files
+  # res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$lscript")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
+  # install packages
+  # res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$iscript")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
 
   return 0
 }

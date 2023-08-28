@@ -89,14 +89,14 @@ dockerAptSources() {
 # excute apt-get sources: dockerAptSources <pkg>
 dockerAptCache() {
   local pkg=$1
-  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg | grep -E '^Version|^Depends|^Provides'")
+  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg | grep -E '^Version|^Depends|^Provides|^Architecture'")
   echo "$retval"
 }
 
 # excute apt-get sources: dockerAptSources <pkg>
 dockerDpkgStatus() {
   local retval pkg="$1"
-  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "dpkg -s $pkg 2> /dev/null | grep -E '^Status|^Version'; exit $?")
+  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "dpkg -s $pkg 2> /dev/null | grep -E '^Status|^Version|^Architecture'; exit $?")
   [[ -z "$retval" ]] && return 1
   echo "$retval"
   return 0
@@ -118,7 +118,7 @@ dockerMakeDir() {
   dockerDirExec "" mkdir $@
 }
 
-# create dir inside repo: dockerMakeDir <dir>
+# delete dir inside repo: dockerMakeDir <dir>
 dockerRmDir() {
   dockerExec rm -rf $@
 }

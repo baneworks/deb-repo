@@ -457,7 +457,7 @@ buildTask() {
 
   # fixme: test mode
   info "buildTask /$task/" "install (2/4): ... taskMkInstall skipped ..."
-  # info $task "install (2/2): pkgs list ..."
+  # info $task "install (2/4): pkgs list ..."
   # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_INST_FLT" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_INST_FLT"
   # taskMkInstall "$task" "$BREQ_PKGS_INST" "$BREQ_PKGS_INST_FLT"
   # [[ $? -gt 0 ]] && error 1 DPKG "mk install list failed"
@@ -468,17 +468,20 @@ buildTask() {
   # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_DLSH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_DLSH"
   # [[ -d "$(dockerRelativePath sh)/$task" ]] && dockerRmDir "./$(tagValue sh)/$task"
   # [[ -d "$(dockerRelativePath dbin)/$task" ]] && dockerRmDir ./"$(tagValue dbin)/$task"
-  # taskDload "$task" "$BREQ_PKGS_INST_FLT" "$BREQ_PKGS_DLSH"
+  # taskDload "$task" "$BREQ_PKGS_INST_FLT-test" "$BREQ_PKGS_DLSH"
   # [[ $? -gt 0 ]] && error 1 DPKG "dload install list failed"
 
   # fixme: test mode
-  info "buildTask /$task/" "install (4/4): ... taskDebInstall skipped ..."
-  # info $task "install (3/4): dpkg install ..."
-  # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_DLSH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_DLSH"
-  # [[ -d "$(dockerRelativePath sh)/$task" ]] && dockerRmDir "./$(tagValue sh)/$task"
-  # [[ -d "$(dockerRelativePath dbin)/$task" ]] && dockerRmDir ./"$(tagValue dbin)/$task"
-  # taskDebInstall "$task" "$BREQ_PKGS_INST_FLT" "$BREQ_PKGS_DLSH"
-  # [[ $? -gt 0 ]] && error 1 DPKG "dload install list failed"
+  # info "buildTask /$task/" "install (4/4): ... taskDebInstall skipped ..."
+  info $task "install (4/4): dpkg install ..."
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_ISH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_ISH"
+  [[ -f "$(dockerRelativePath sh)/$task/$BREQ_PKGS_ISH" ]] && dockerRmDir ./"$(tagValue sh)/$task/$BREQ_PKGS_ISH"
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_USH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_USH"
+  [[ -f "$(dockerRelativePath sh)/$task/$BREQ_PKGS_USH" ]] && dockerRmDir ./"$(tagValue sh)/$task/$BREQ_PKGS_USH"
+  [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_LSH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_LSH"
+  [[ -f "$(dockerRelativePath sh)/$task/$BREQ_PKGS_LSH" ]] && dockerRmDir ./"$(tagValue sh)/$task/$BREQ_PKGS_LSH"
+  taskDebInstallTest "$task" "$BREQ_PKGS_INST_FLT-test" "$BREQ_PKGS_ISH" "$BREQ_PKGS_USH" "$BREQ_PKGS_LSH"
+  [[ $? -gt 0 ]] && error 1 DPKG "install debs failed"
 
 }
 

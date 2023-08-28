@@ -23,12 +23,31 @@ bspecFile() {
   local bname=(${1//'/'/ })
   local bver="${bname[1]}"
   bname="${bname[0]}"
-
   local arch="$2"
-  [[ -z "$arch" ]] && arch="amd64"
-
+  if [[ -z "$arch" ]]; then #? fetch platform
+    # avaible versions
+    local str="$(dockerAptCache "$bname")"
+    [[ $? -gt 0 ]] && return 1
+    local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$str")
+    local va
+    for sl in ${vstr//"\n"/ }; do
+      sl=$(tr -cd '[:print:]' <<< "$sl")
+      va+=("$sl")
+    done
+    # which version is needed?
+    local idx=$(breqWhichVersion "$bver" "${va[@]}")
+    [[ $? -gt 0 ]] && echo "" && return 1 #! no suitable version
+    # fetch platform
+    local astr=$(sed -n 's/^Architecture: \(.*\)$/\1/1p' <<< "$str")
+    local aa
+    for al in ${astr//"\n"/ }; do
+      al=$(tr -cd '[:print:]' <<< "$al")
+      aa+=("$al")
+    done
+    [[ $? -gt 0 ]] && echo "" && return 1 #! mess in platforms and versions
+    local arch=${aa[$idx]}
+  fi
   bver=${bver//':'/'%3a'}
-
-  echo "$bname_$bver_$arch.deb"
+  echo "${bname}_${bver}_${arch}.deb"
 }
 # endregion

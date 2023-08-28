@@ -11,6 +11,7 @@ environment:
       ☐ tests (https://github.com/reconquest/tests.sh)
   ✔ local fhs @done(23-08-01 20:25)
   ✔ guest fhs @done(23-08-02 00:42)
+    ☐ auto update sources list
   ☐ refactor repo
     ☐ merge repo with vms
     ☐ run docker in bg
@@ -87,6 +88,7 @@ bash-builder:
       ✔ if root node hasn't deps - it not added to .flatten @done(23-08-28 02:30)
       ☐ bspecVersionHR 'perl-base/5.32.1-4+deb11u2' => ""
       ☐ bspecVersion & bspecVersionHR to one
+      ☐ flat installs to chained
     ☐ document
       ☐ bspec-lib
       ☐ build-lib
