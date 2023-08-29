@@ -145,6 +145,7 @@ breqRepStr() {
 
 # region #! node funcs
 
+# fixme: replace to grep
 # $1 - bspec
 breqSeenBefore() {
   local bspec="$1"
@@ -201,11 +202,39 @@ breqAddNode() {
   local retvalue="$3"
   shift; shift; shift;
 
-  local bname=$(bspecName $bspec)
-  local bver=$(bspecVersionHR $bspec)
+  local bname=$(bspecName "$bspec")
+  local bver=$(bspecVersionHR "$bspec")
 
-  # fixme: test mode
-  # [[ $level -eq 1 && "$bname" != "autoconf" ]] && return 0
+  local task=($@); task="${task[0]}"
+
+  if [[ $(grep -c "$bname" < "$BREQ_DIR/$task/$BREQ_FLATTEN") -eq 0 ]] ||
+     [[ $(grep -c "$bname" < "$BREQ_DIR/$task/.virtuals") -eq 0 ]]
+  then
+    # todo: perfomance inpact -> find way to move lover
+    local str=$(dockerAptCache "$bname")
+    #? ---- virtual ----
+    if [[ "$str" == "virtual" ]]; then
+      local pva=($(dockerAptVirtualProviders "$bname"))
+      for ((i=0; i<${#pva[@]}; ++i)); do
+        local pfields=(${pva[$i]//'&'/ })
+        local virt_vrq=$(sed 's/[()]//g' <<< "${pfields[2]} ${pfields[3]}")
+        local virt_ver="${pfields[1]}"
+        local virt_name="${pfields[0]}"
+        [[ "$bver" == "$virt_vrq" ]] && break
+      done
+      if [[ $i -gt ${#pva[@]} ]]; then
+        breqPrintStatus $level "err" "!prov"
+        echo "$bspec" # pass current package upstack
+        return 1 #! no providers for virtual isn't good - lets caller decide
+      fi
+      echo "$bname $virt_name" >> "$BREQ_DIR/$task/.virtuals"
+      local str=$(dockerAptCache "$virt_name=$virt_ver")
+      bspec="$virt_name/$virt_ver"
+      bname=$(bspecName $bspec)
+      bver=$(bspecVersionHR $bspec)
+    fi
+  fi
+  #? ---- /virtual ----
 
   #? ---- init ----
   local pa=($@) # parents array
@@ -235,14 +264,13 @@ breqAddNode() {
 
   req_dir+="/$bname"
   pinfo="${pinfo:1}"
-
-  breqPrintName $level "$pinfo/$bname"
-
   [[ -d "$req_dir" ]] || mkdir "$req_dir"
   echo "$bname" > "$req_dir/.name"
   echo "$bver" > "$req_dir/.version"
   echo "$parent" > "$req_dir/.parent"
   #? ---- /init ----
+
+  breqPrintName $level "$pinfo/$bname"
 
   #? ---- cyclic depend ----
   if [[ -n $is_cyclic ]]; then # yep, cyclic dependecy
@@ -287,7 +315,7 @@ breqAddNode() {
   local is_seen=$(breqSeenBefore "$bspec")
   if [[ -n $is_seen ]]; then
     #? add as endpoint for vreq checks
-    # todo: to so clever realisation
+    # todo: do more clever realisation
     echo "$level $bspec" >> "$BREQ_DIR/$task/$BREQ_FLATTEN"
     breqPrintStatus $level "have" "$bname"
     echo "$retvalue"
@@ -296,7 +324,7 @@ breqAddNode() {
   #? ---- /seen ----
 
   #? ---- gathering depends ----
-  local str="$(dockerAptCache "$bname")"
+  local str=$(dockerAptCache "$bname")
   local dstr=$(breqPackString "$(sed -n 's/^Depends: \(.*\)$/\1/pg' <<< $str)")
 
   local da
@@ -307,7 +335,24 @@ breqAddNode() {
 
   #* nodeps is ok - check for cyclic we done earlier
   if [[ ${#da[@]} -eq 0 ]]; then
-    echo "$level $bspec" >> "$BREQ_DIR/$task/$BREQ_FLATTEN"
+    # fixme: ugly & boilerplate & possible bug
+    #? ---- gathering provides ----
+    local prov_str=$(breqPackString "$(sed -n 's/^Provides: \(.*\)$/\1/pg' <<< $str)")
+    unset prov_a; local prov_a
+    for line in ${prov_str//"\n"/ }; do
+      line=$(tr -cd '[:print:]' <<< "$line")
+      prov_a+=($line)
+    done
+    local provides="${prov_a[$idx]}"
+    provides=$(breqParsePacked "${provides[@]}")
+    provides=$(sed 's/\/=/\//g' <<< "$provides") # remove = from provides
+    # fixme: possible bug
+    bver=$(sed 's/^[=>< ]\+//g' <<< "$bver") # remove <=> from package
+    echo "$level $bname/$bver $provides" >> "$BREQ_DIR/$task/$BREQ_FLATTEN" # todo: cover with tests
+    # fixme: not actualy needed
+    echo "$provides" > "$req_dir/.provides" # save depend's provides
+    #? ---- /provides ----
+    # echo "$level $bspec" >> "$BREQ_DIR/$task/$BREQ_FLATTEN"
     breqPrintStatus $level "nodep"
     echo "$retvalue"  # don't mutate retvalue
     return 0
@@ -347,7 +392,7 @@ breqAddNode() {
 
   #? ---- gathering provides ----
   local prov_str=$(breqPackString "$(sed -n 's/^Provides: \(.*\)$/\1/pg' <<< $str)")
-  local prov_a
+  unset prov_a; local prov_a
   for line in ${prov_str//"\n"/ }; do
     line=$(tr -cd '[:print:]' <<< "$line")
     prov_a+=($line)
@@ -414,7 +459,7 @@ buildTask() {
   # done
 
   # fixme: test mode
-  info "buildTask /$task/" "... taskSumVReq skipped ..."
+  # info "buildTask /$task/" "... taskSumVReq skipped ..."
   # [[ -f "$BREQ_DIR/$task/$BREQ_FLATTEN_RW" ]] && rm -f "$BREQ_DIR/$task/$BREQ_FLATTEN_RW"
   # info $task "versions ..."
   # taskSumVreq "$task" "$BREQ_FLATTEN" "$BREQ_FLATTEN_RW"
@@ -427,7 +472,7 @@ buildTask() {
   # [[ $? -gt 0 ]] && error 1 FDEPS "finalization of depends failed"
 
   # fixme: test mode
-  info "buildTask /$task/" "packages (1/4): ... taskUnalias skipped ..."
+  info "buildTask /$task/" "packages (2/4): ... taskUnalias skipped ..."
   # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_UNALIAS" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_UNALIAS"
   # info $task "packages (2/4): solving virtuals ..."
   # taskUnalias "$task" "$BREQ_PKGS" "$BREQ_PKGS_UNALIAS"
@@ -463,12 +508,12 @@ buildTask() {
   # [[ $? -gt 0 ]] && error 1 DPKG "mk install list failed"
 
   # fixme: test mode
-  info "buildTask /$task/" "install (3/4): ... taskDload skipped ..."
+  # info "buildTask /$task/" "install (3/4): ... taskDload skipped ..."
   # info $task "install (3/4): pkgs dload ..."
   # [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_DLSH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_DLSH"
   # [[ -d "$(dockerRelativePath sh)/$task" ]] && dockerRmDir "./$(tagValue sh)/$task"
   # [[ -d "$(dockerRelativePath dbin)/$task" ]] && dockerRmDir ./"$(tagValue dbin)/$task"
-  # taskDload "$task" "$BREQ_PKGS_INST_FLT-test" "$BREQ_PKGS_DLSH"
+  # taskDload "$task" "$BREQ_PKGS_INST_FLT" "$BREQ_PKGS_DLSH"
   # [[ $? -gt 0 ]] && error 1 DPKG "dload install list failed"
 
   # fixme: test mode
@@ -480,7 +525,7 @@ buildTask() {
   [[ -f "$(dockerRelativePath sh)/$task/$BREQ_PKGS_USH" ]] && dockerRmDir ./"$(tagValue sh)/$task/$BREQ_PKGS_USH"
   [[ -f "$BREQ_DIR/$task/$BREQ_PKGS_LSH" ]] && rm -f "$BREQ_DIR/$task/$BREQ_PKGS_LSH"
   [[ -f "$(dockerRelativePath sh)/$task/$BREQ_PKGS_LSH" ]] && dockerRmDir ./"$(tagValue sh)/$task/$BREQ_PKGS_LSH"
-  taskDebInstallTest "$task" "$BREQ_PKGS_INST_FLT-test" "$BREQ_PKGS_ISH" "$BREQ_PKGS_USH" "$BREQ_PKGS_LSH"
+  taskDebInstallTest "$task" "$BREQ_PKGS_INST_FLT" "$BREQ_PKGS_ISH" "$BREQ_PKGS_USH" "$BREQ_PKGS_LSH"
   [[ $? -gt 0 ]] && error 1 DPKG "install debs failed"
 
 }

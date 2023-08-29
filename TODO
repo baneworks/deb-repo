@@ -43,7 +43,7 @@ bash-builder:
         ✔ installed @done(23-08-28 02:30)
           ✔ filer @done(23-08-28 02:30)
           ✔ with versions @done(23-08-28 02:30)
-        ☐ dload
+        ✔ dload @done(23-08-29 03:19)
         ☐ install
       ☐ build
         ☐ unpack
@@ -89,6 +89,9 @@ bash-builder:
       ☐ bspecVersionHR 'perl-base/5.32.1-4+deb11u2' => ""
       ☐ bspecVersion & bspecVersionHR to one
       ☐ flat installs to chained
+      ☐ purely virtual bugs
+        ☐ debconf empty provides
+        ☐ perlapi-5.32.0
     ☐ document
       ☐ bspec-lib
       ☐ build-lib

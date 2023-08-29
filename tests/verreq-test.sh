@@ -6,7 +6,10 @@
 . ./bin/bspec-lib
 . ./bin/log-lib
 
-echo "dv: $(dverCompose '>= 11' '< 12.6~')"
+echo "cmp: $(dverCmp '3.1-3' '3.1~')"
+echo "match: $(dverMatch '>= 3.1~' '3.1-3')"
+
+[[ '~' > '-' ]] && echo ">" || echo "<"
 
 exit 0
 
@@ -37,5 +40,3 @@ for line in "${lines[@]}"; do
     fi
   fi
 done
-
-echo "dv: $(dverCompose '>= 11' '< 12.6~')"

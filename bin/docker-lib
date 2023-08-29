@@ -86,14 +86,43 @@ dockerAptSources() {
   echo "$retval"
 }
 
-# excute apt-get sources: dockerAptSources <pkg>
+# excute apt-cache show: dockerAptCache <pkg>
 dockerAptCache() {
-  local pkg=$1
-  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg | grep -E '^Version|^Depends|^Provides|^Architecture'")
+  local pkg="$1"
+  local str=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg")
+  local errc=0
+  retval=$(grep -E '^Version|^Depends|^Provides|^Architecture' <<< "$str")
+  if [[ -z "$retval" ]]; then #? checks for virtual
+    if [[ -n $(grep 'as it is purely virtual' <<< "$str") ]]; then
+      retval="virtual"
+      errc=0
+    else
+      retval=""
+      errc=1
+    fi
+  fi
   echo "$retval"
+  return $errc
 }
 
-# excute apt-get sources: dockerAptSources <pkg>
+# excute apt-cache showpkg to solve purely virtual: dockerAptCache <pkg>
+dockerAptVirtualProviders() {
+  local pkg="$1"
+  retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache showpkg $pkg | grep -A100 'Reverse Provides:'")
+  if [[ -n "$retval" ]]; then
+    retval=$(breqPackString "$retval")
+    local vpa
+    for line in ${retval//"\n"/ }; do
+      [[ -n $(grep 'Reverse' <<< "$line") ]] && continue
+      line=$(tr -cd '[:print:]' <<< "$line")
+      vpa+=("$line")
+    done
+  fi
+  echo "${vpa[@]}"
+  return 0
+}
+
+# excute dpkg --status: dockerDpkgStatus <pkg>
 dockerDpkgStatus() {
   local retval pkg="$1"
   retval=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "dpkg -s $pkg 2> /dev/null | grep -E '^Status|^Version|^Architecture'; exit $?")

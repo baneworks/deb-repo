@@ -48,10 +48,10 @@ taskMakeFHS() {
 
   # fixme: test mode
   # [[ -d "$btree" ]] && rm -rf "$btree"
-  mkdir -p "$btree/$1"
-  # touch "$btree/$1/.flatten"
-  # touch "$btree/$1/.flatten-rw"
-  # touch "$btree/$1/.packages"
+  # mkdir -p "$btree/"
+  # touch "$btree/.flatten"
+  # touch "$btree/.version"
+  # touch "$btree/.virtuals"
 }
 
 # todo: rewrite & add abitilty to change working mode [docker | local]
@@ -84,7 +84,7 @@ taskInit() {
   fi
 
   # fixme: test mode
-  info "taskInit /$task/" "... sources skipped ..."
+  # info "taskInit /$task/" "... sources skipped ..."
   # taskMakeFHS $task
   # info $task "sources ..."
   # [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
@@ -105,7 +105,8 @@ taskParseBR() {
   str=$(tr -cd '[:print:]' <<< $str)
 
   # fixme: alternate depends (x | y) not supported yet, installing both
-  str=$(sed 's/ | bsdmainutils (<< 12\.1\.1~),/,/g' <<< $str) # fixme: hack
+  str=$(sed 's/ | bsdmainutils (<< 12\.1\.1~)//g' <<< $str) # fixme: hack
+  str=$(sed 's/ | debconf-2.0//g' <<< $str) # fixme: hack
   str=$(sed 's/ |/,/g' <<< $str)
 
   str=${str//', '/'/'}
@@ -131,12 +132,36 @@ taskParseBR() {
 
 # parse task dcs and return breqs array: taskReqs <task>
 taskReqs() {
-  local task=$1
+  local task="$1"
 
   info $task "build-reqs ..."
 
   local dsc=$(taskDsc $task)
   local bspecs=($(taskParseBR "$(cat $dsc | sed -n 's/Build-Depends:\(.*\)/\1/p')"))
+
+  for ((i=0; i<${#bspecs[@]}; ++i)); do
+    #? ---- virtual ----
+    local name=$(bspecName "${bspecs[$i]}")
+    local ver=$(bspecVersionHR "${bspecs[$i]}")
+    local str=$(dockerAptCache "$name")
+    if [[ "$str" == "virtual" ]]; then
+      local pva=($(dockerAptVirtualProviders "$name"))
+      for ((j=0; j<${#pva[@]}; ++j)); do
+        local pfields=(${pva[$j]//'&'/ })
+        local virt_vrq=$(sed 's/[()]//g' <<< "${pfields[2]} ${pfields[3]}")
+        local virt_ver="${pfields[1]}"
+        local virt_name="${pfields[0]}"
+        [[ "$ver" == "$virt_vrq" ]] && break
+      done
+      if [[ $j -gt ${#pva[@]} ]]; then
+        breqPrintStatus 0 "err" "!prov"
+        echo "$bspec" # pass current package upstack
+        return 1 #! no providers for virtual isn't good - lets caller decide
+      fi
+      bspecs[$i]="$virt_name/$virt_ver"
+    fi
+    #? ---- /virtual ----
+  done
 
   echo "${bspecs[*]}"
 }
@@ -715,7 +740,7 @@ taskFilterInstalled() {
       local vstr="$(dockerAptCache "$bname")"
       [[ $? -gt 0 ]] && return 1
       local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$vstr")
-      local va
+      unset va; local va
       for sl in ${vstr//"\n"/ }; do
         sl=$(tr -cd '[:print:]' <<< "$sl")
         va+=("$sl")
@@ -945,8 +970,6 @@ taskDebInstall() {
       echo "${umid}" >> "$ush_out"
       echo "${lmid}" >> "$lsh_out"
     fi
-  # fixme: test mode
-  # [[ $i -gt 3 ]] && break
   done
   echo -e "$iend" >> "$ish_out"
   echo -e "$uend" >> "$ush_out"
@@ -1052,8 +1075,6 @@ taskDebInstallTest() {
       # echo "${umid}" >> "$ush_out"
       echo "${lmid}" >> "$lsh_out"
     fi
-  # fixme: test mode
-  # [[ $i -gt 3 ]] && break
   done
   echo "${icmd_end}" >> "$ish_out"
   echo "${ucmd_end}" >> "$ush_out"
