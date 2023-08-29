@@ -5,14 +5,17 @@
 #              sh-dpkg-install, sh-dpkg-binary, sh-dpkg-purge.
 #              Testing and collecting test samples not allowed for installed sh-dpkg and
 #              must be disabled. If you want tests - it must be enabled outside
-#             (e.g. in `.envrc`) by setting TEST_ENABLE or TEST_SAMPLES (whatever you need).
+#              (e.g. in `.envrc`) by setting TEST_ENABLE (TEST_RUN, TEST_SAMPLES whatever
+#              you need).
 
 #! tests - not affected on installed sh-dpkg and must be disabled
-#? testing (TEST_ENABLE, TEST_SAMPLES) must be enabled outside (e.g. in `.envrc`)
-if [[ -n ${TEST_ENABLE} || -n ${TEST_SAMPLES} ]]; then
+#? testing (TEST_ENABLE, TEST_RUN, TEST_SAMPLES) must be enabled outside (e.g. in `.envrc`)
+if [[ -n ${TEST_ENABLE} ]]; then
   [[ -z ${TEST_DIR} ]] && TEST_DIR="./tests"
-  TSMPL_VER="${TEST_DIR}/samples/vers"
-  TSMPL_VREQ="${TEST_DIR}/samples/vreq"
+  if [[ -n ${TEST_SAMPLES} ]]; then
+    TSMPL_VER="${TEST_DIR}/samples/vers"
+    TSMPL_VREQ="${TEST_DIR}/samples/vreq"
+  fi
 fi
 
 #! tags
@@ -24,23 +27,25 @@ TAG_TMP="tmp"
 TAG_TREE=".btree"
 
 #! repo
-REPO_NAME="sh-dpkg"
+REPO_NAME="sh-dpkg" # todo: confugure.in
 
 #! docker run
 DC_NAME="debian"
 DC_USER="mtain"
 DC_GROUP="users"
-DC_REPO="/var/tmp/$REPO_NAME"
+DC_RERO_DIR="/var/tmp" # todo: confugure.in
+DC_REPO="$DC_RERO_DIR/$REPO_NAME"
 DC_SUCMD="su -c '$cmd'"
 
 #! local run
-LC_REPO="/var/tmp/$REPO_NAME"
+LC_REPO_DIR="/var/tmp/"
+LC_REPO="$LC_REPO_DIR/$REPO_NAME" # todo: confugure.in
 LC_TREE="$LC_REPO/$TAG_TREE"
 LC_SUCMD="su -c '$cmd'"
 
 # todo: implement switchable repo
 REPO="$DC_REPO" # fixme: temporary
-TREE="$REPOD/$TAG_BTREE"
+TREE="$REPO/$TAG_BTREE"
 
 # todo: drop
 TAG_TREE_DIR="$REPO/$TAG_TREE"   #? "tree"
@@ -67,7 +72,7 @@ BREQ_PKGS_INST_CRL=".install-out"
 BREQ_PKGS_DLSH="download.sh"
 BREQ_PKGS_ISH="install.sh"
 BREQ_PKGS_USH="uninstall.sh"
-BREQ_PKGS_LSH="list.sh"
+BREQ_PKGS_LSH="fcheck.sh"
 
 #! depends parsing related
 CYC_MAX_DEPTH=200 # limit for cyclic processing

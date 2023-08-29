@@ -51,23 +51,7 @@ bash-builder:
           ✘ install unpackers @cancelled(23-08-29 20:48)
         ✘ patch @cancelled(23-08-29 20:48)
         ✘ make @cancelled(23-08-29 20:48)
-        ☐ package
-          ☐ vars to global
-          ☐ libs to lib
-          ☐ switches
-            ☐ type of excution (local | docker)
-            ☐ --libs
-            ☐ --out
-            ☐ --var
-          ☐ commands
-            ☐ sh-dpkg-source (init + source)
-            ☐ sh-dpkg-tree
-            ☐ sh-dpkg-dload
-            ☐ sh-dpkg-install
-            ☐ sh-dpkg-binary
-            ☐ sh-dpkg-purge
-          ☐ configure.in
-        ✔ clean depends @done(23-08-29 20:45)
+        ✔ purge depends @done(23-08-29 20:45)
       ☐ extra
         ☐ tests
           ☐ write
@@ -85,13 +69,25 @@ bash-builder:
           ☐ stable builds
           ☐ unstable builds
     ☐ package builder
-      ☐ name of package
-      ☐ all globals to one
-      ☐ support configure
-      ☐ libs to /usr/share/share
-      ☐ some globals to ini
+      ✔ name of package @done(23-08-29 22:06)
+      ✔ vars to global @done(23-08-29 22:08)
+      ☐ sh-dpkg
       ☐ build targets co command line
-      ☐ build tree to /tmp
+      ☐ libs to /usr/share/
+      ☐ switches
+        ☐ type of excution (local | docker)
+        ☐ --libs
+        ☐ --out
+        ☐ --var
+      ☐ commands
+        ☐ source (init + source)
+        ☐ tree
+        ☐ dload
+        ☐ install
+        ☐ binary
+        ☐ purge
+      ☐ configure.in
+      ✘ build tree to /tmp @cancelled(23-08-29 22:07)
     ☐ fixes
       ☐ support '|' depends
       ✔ debian version behaivor '-' is greatest, '~' smallest @done(23-08-29 15:11)

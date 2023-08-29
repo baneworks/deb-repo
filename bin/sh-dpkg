@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# @file sh-dpkg
+# @brief The main script `sh-dpkg`.
+# @description Run with:
+#                - `sh-dpkg source [opts] <pkg>` to gather the source;
+#                - `sh-dpkg tree [opts] <pkg>` to build depends tree;
+#                - `sh-dpkg dload [opts] <pkg>` to download binary debs;
+#                - `sh-dpkg install [opts] <pkg>` to download binary debs related to sources;
+#                - `sh-dpkg binary [opts] <pkg>` to build binary debs from sources;
+#                - `sh-dpkg purge [opts] <pkg>` to uninstall binary debs.
+#              Use `--local` (default) to run script locally or `--docker` to use docker backend.
+
+#? defaults
+
+# todo: configure.in
+LIBS="$SHDPKG_LIBS"
+
+# fixme: temporary
+SHDPKG_USEDOCKER=1; SHDPKG_LCRUN=""
+# [[ "${2// /}" == "--docker" ]] && (SHDPKG_USEDOCKER=1; SHDPKG_LCRUN="") || (SHDPKG_USEDOCKER=""; SHDPKG_LCRUN=1)
+
+#? include
+
+source $LIBS/globals.sh
+source $LIBS/test.sh # todo: configure.in
+source $LIBS/log.sh
+source $LIBS/tag.sh
+source $LIBS/bspec.sh
+
+
+source $LIBS/bkend.sh
+# source $LIBS/task-lib
+# source $LIBS/build-lib
+
+#? init
