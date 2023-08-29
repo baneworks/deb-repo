@@ -1,6 +1,7 @@
 tmp
 .gitignore
 .build-reqs*
+.btree*
 .vscode
 .direnv
 result
