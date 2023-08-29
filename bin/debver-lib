@@ -73,6 +73,21 @@ dverCmp() {
 
     local i=0
     while [[ -n $tstr_part || -n $vstr_part ]]; do
+      #? '-' & '~' part. '-' is greatest, but '~' smallest (thanks a lot, debian)
+      regexp='s/^\([~\-]\)\(.*\)\?$'
+      local t_special=$(sed -n "$regexp/\1/1p" <<< $tstr_part)
+      local v_special=$(sed -n "$regexp/\1/1p" <<< $vstr_part)
+      if ! [[ $t_special == $v_special ]]; then
+        [[ $t_special == '-' ]] && res=">"
+        [[ $t_special == '~' ]] && res="<"
+        [[ $v_special == '-' ]] && res="<"
+        [[ $v_special == '~' ]] && res=">"
+        echo "$res"
+        return $ret
+      fi
+      [[ -n $t_special ]] && tstr_part=$(sed -n "$regexp/\2/1p" <<< $tstr_part)
+      [[ -n $v_special ]] && vstr_part=$(sed -n "$regexp/\2/1p" <<< $vstr_part)
+
       #? non digit part
       regexp='s/^\([^0-9]\+\)\([0-9].*\)\?$'
       local t_chars=$(sed -n "$regexp/\1/1p" <<< $tstr_part)
@@ -211,7 +226,7 @@ dverMatch() {
 #
 # @exitcode 0 on success composition (in this case )
 # @exitcode 1 on failure
-# @exitcode 2 not implemented yes
+# @exitcode 2 not implemented yet
 #
 # @see [version requrenment string](https://manpages.ubuntu.com/manpages/xenial/en/man5/deb-control.5.html)
 dverCompose() {
@@ -226,8 +241,10 @@ dverCompose() {
     return 0
   fi
 
-  # fixme: implement '><' case
-  if [[ "${lc:0:1}" == '>' && "${rc:0:1}" == '<' ]]; then
+  # fixme: implement '><' '<>' case
+  if [[ "${lc:0:1}" == '>' && "${rc:0:1}" == '<' ]] ||
+     [[ "${lc:0:1}" == '<' && "${rc:0:1}" == '>' ]]
+  then
     echo ""
     return 2
   fi

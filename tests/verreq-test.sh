@@ -6,10 +6,15 @@
 . ./bin/bspec-lib
 . ./bin/log-lib
 
-echo "cmp: $(dverCmp '3.1-3' '3.1~')"
-echo "match: $(dverMatch '>= 3.1~' '3.1-3')"
+# echo "cmp: $(dverCmp '3.3~20180313' '3.3-6')"
+# echo "match: $(dverMatch '>= 3.3~20180313' '3.3-6')"
+# [[ '~' > '-' ]] && echo "greater"
 
-[[ '~' > '-' ]] && echo ">" || echo "<"
+echo "match '>=2020.20200327.54578-7+deb11u1': $(dverMatch '>= 2020.20200327.54578-7+deb11u1' '2020.20200327.54578-7+deb11u1')"
+echo "match '<2020.20200327.54578-7+deb11u1.1~': $(dverMatch '< 2020.20200327.54578-7+deb11u1.1~' '2020.20200327.54578-7+deb11u1')"
+echo "compose: $(dverCompose '< 2020.20200327.54578-7+deb11u1.1~' '>= 2020.20200327.54578-7+deb11u1')"
+
+# echo "cmp v_2: $(dverCmp '2020.20200327.54578-7+deb11u1' '2020.20200327.54578-7')"
 
 exit 0
 

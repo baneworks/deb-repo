@@ -65,6 +65,9 @@ taskClearFHS() {
   # fixme: test mode
   # dockerExec rm -rf {"$btree","$srcdir","$bindir","$tmpdir"}
   # [[ -d "$btree" ]] && rm -rf "$btree"
+  # mkdir -p "$btree"
+  # touch "$btree/.flatten"
+  # touch "$btree/.virtuals"
 }
 
 # todo: refactor
@@ -84,7 +87,7 @@ taskInit() {
   fi
 
   # fixme: test mode
-  # info "taskInit /$task/" "... sources skipped ..."
+  info "taskInit /$task/" "... sources skipped ..."
   # taskMakeFHS $task
   # info $task "sources ..."
   # [[ $(dockerAptSources $task) -eq 0 ]] || error 1 $task "apt-get source failed!"
@@ -138,6 +141,7 @@ taskReqs() {
 
   local dsc=$(taskDsc $task)
   local bspecs=($(taskParseBR "$(cat $dsc | sed -n 's/Build-Depends:\(.*\)/\1/p')"))
+  bspecs+=($(taskParseBR "$(cat $dsc | sed -n 's/Build-Depends-Indep:\(.*\)/\1/p')"))
 
   for ((i=0; i<${#bspecs[@]}; ++i)); do
     #? ---- virtual ----
@@ -274,10 +278,15 @@ taskSumVreq() {
 
           # fixme: fix dverCompose arg order
           rw_bver=$(dverCompose "$dst_bver" "$rw_bver")
+          local errc="$?"
 
-          if [[ $? -gt 0 ]] || [[ -z "$rw_bver" ]]; then #! empty vreq is also bad
-            error 1 VERSUM "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
-            return 1
+          if [[ $errc -gt 0 ]] || [[ -z "$rw_bver" ]]; then #! empty vreq is also bad
+            if [[ $errc -eq 2 ]]; then #! not implemented is not a caller problem
+              warning "$task" "not implemented compose with ${dst_bver:0:12}... with ${rw_bver:0:12}... at line $(( $li + 1 ))"
+            else
+              error 1 VERSUM "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+              return 1
+            fi
           fi
         fi
 
