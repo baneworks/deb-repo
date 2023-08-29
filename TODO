@@ -45,19 +45,34 @@ bash-builder:
           ✔ with versions @done(23-08-28 02:30)
         ✔ dload @done(23-08-29 03:19)
         ✔ install @done(23-08-29 14:15)
-      ☐ build
-        ☐ unpack
-          ☐ detect type of archive
-          ☐ install unpackers
-        ☐ patch
-        ☐ make
+      ✔ build @done(23-08-29 20:48)
+        ✔ unpack @done(23-08-29 20:48)
+          ✘ detect type of archive @cancelled(23-08-29 20:48)
+          ✘ install unpackers @cancelled(23-08-29 20:48)
+        ✘ patch @cancelled(23-08-29 20:48)
+        ✘ make @cancelled(23-08-29 20:48)
         ☐ package
-        ☐ clean depends
+          ☐ vars to global
+          ☐ libs to lib
+          ☐ switches
+            ☐ type of excution (local | docker)
+            ☐ --libs
+            ☐ --out
+            ☐ --var
+          ☐ commands
+            ☐ init
+            ☐ btree
+            ☐ dload
+            ☐ install
+            ☐ build
+            ☐ clean
+            ☐ purge
+          ☐ configure.in
+        ✔ clean depends @done(23-08-29 20:45)
       ☐ extra
         ☐ tests
           ☐ write
           ☐ call stack
-        ☐ switch type of excution (local | docker)
         ☐ different platforms (amd64, aarch64)
         ☐ multiarch packages (libc6:amd64)
         ☐ src-repo simulation
