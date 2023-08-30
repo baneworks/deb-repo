@@ -117,4 +117,32 @@ lcrunAptSources() {
   return "$rc"
 }
 
+# @description Function to excute the `apt-cache show`.
+#
+# @example
+#    $(lcrunAptCache <pkg>)"
+#
+# @arg `pkg` package to query
+lcrunAptCache() {
+  local pkg="$1"
+  local rv=$(apt-cache show $pkg)
+  local rc=$?
+  if [[ $rc -gt 0 ]]; then
+    echo "$rc"
+    return $rv
+  fi
+  rv=$(grep -E '^Version|^Depends|^Provides|^Architecture' <<< "$rv")
+  if [[ -z "$rv" ]]; then #? checks for virtual
+    if [[ -n $(grep 'as it is purely virtual' <<< "$rv") ]]; then
+      rv="virtual"
+      errc=0
+    else
+      rv=""
+      errc=1
+    fi
+  fi
+  echo "$rv"
+  return $rc
+}
+
 # endregion

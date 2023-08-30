@@ -143,14 +143,12 @@ dockerAptSources() {
 
 # region #! old part
 
-# excute apt-cache show: dockerAptCache <pkg>
-# @description Function to excute the `apt-get source`.
-#              Not using `dockerExec` (for pretty output reasons)
+# @description Function to excute the `apt-cache show`.
 #
 # @example
-#    $(dockerAptSources <task>)"
+#    $(dockerAptCache <pkg>)"
 #
-# @arg `task` a build task
+# @arg `pkg` package to query
 dockerAptCache() {
   local pkg="$1"
   local str=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg")

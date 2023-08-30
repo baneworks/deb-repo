@@ -82,7 +82,7 @@ bash-builder:
       ✔ commands @done(23-08-31 02:38)
         ✔ source (init + source) @done(23-08-31 02:38)
         ✔ tree @done(23-08-31 02:38)
-        ☐ dload
+        ✔ dload @done(23-08-31 05:54)
         ☐ install
         ☐ binary
         ☐ purge

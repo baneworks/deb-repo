@@ -3,6 +3,8 @@
 # @brief The switching backend (docker | local).
 
 [[ -n "${SHDPKG_USEDOCKER}" && -n "${SHDPKG_LCRUN}" ]] && error 1 bkend "choose local or docker backend, not both"
+[[ -n $SHDPKG_LCRUN ]] && BKEND_SUCMD="$LC_SUCMD"
+[[ -n $SHDPKG_USEDOCKER ]] && BKEND_SUCMD="$DC_SUCMD"
 
 source "$LIBS/docker.sh"
 source "$LIBS/lcrun.sh"
@@ -79,10 +81,13 @@ bkendCopy() {
 # @internal
 bkendExec() {
   local rv rc=0
-  [[ -n $SHDPKG_LCRUN ]] && rv=$(lcrunExec "$@")
-  rc=$?
-  [[ -n $SHDPKG_USEDOCKER ]] && rv=$(dockerExec "$1/$(tagValue $2)" "$3")
-  rc=$?
+  if [[ -n $SHDPKG_LCRUN ]]; then
+    rv=$(lcrunExec "$@")
+    rc=$?
+  elif [[ -n $SHDPKG_USEDOCKER ]]; then
+    rv=$(dockerExec "$(tagValue $2)/$1" "$3")
+    rc=$?
+  fi
   echo "$rv"
   return $rc
 }
@@ -97,4 +102,23 @@ bkendExec() {
 bkendAptSources() {
   [[ -n $SHDPKG_LCRUN ]] && lcrunAptSources "$@"
   [[ -n $SHDPKG_USEDOCKER ]] && dockerAptSources "$@"
+}
+
+# @description Function to excute the `apt-cache show`.
+#
+# @example
+#    $(bkendAptCache <pkg>)"
+#
+# @arg `pkg` package to query
+bkendAptCache() {
+  local rv rc=0
+  if [[ -n $SHDPKG_LCRUN ]]; then
+    rv=$(lcrunAptCache "$@")
+    rc=$?
+  elif [[ -n $SHDPKG_USEDOCKER ]]; then
+    rv=$(dockerAptCache "$@")
+    rc=$?
+  fi
+  echo "$rv"
+  return $rc
 }

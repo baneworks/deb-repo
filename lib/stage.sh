@@ -84,13 +84,14 @@ stageInit() {
               bkendMkDir "" "$(tagValue dbin)/$task"
               stageInvalidate 'inst deb purge' ;;
       'inst') bkendRm "$(tagValue sh)" "$task/install.sh"
-              bkendMkDir "" "$(tagValue sh)/$task"
-              stageInvalidate 'deb purge' ;;
+              bkendMkDir "" "$(tagValue sh)/$task" ;;
+              # stageInvalidate 'deb purge' ;;
        'deb') bkendRm "$(tagValue sh)" "$task/build.sh"
               bkendRm "$(tagValue out)" "$task"
-              bkendMkDir "" "$(tagValue out)/$task"
-              stageInvalidate 'purge' ;;
-     'purge') bkendRm "$(tagValue sh)" "$task/uninstall.sh" ;;
+              bkendMkDir "" "$(tagValue out)/$task" ;;
+              # stageInvalidate 'purge' ;;
+     'purge') bkendRm "$(tagValue sh)" "$task/uninstall.sh"
+              stageInvalidate 'inst deb purge' ;;
            *) ;;
   esac
   return 0
@@ -108,7 +109,9 @@ stageInvalidate() {
   local stages="$@"
   for stage in ${stages[@]}; do
     stageKnown "$stage"
-    [[ -f "$STAMPD/$task/${stage}/state" ]] && (echo "dirty" > "$STAMPD/$task/${stage}/state")
+    if [[ -f "$STAMPD/$task/${stage}/state" ]]; then
+      echo "dirty" > "$STAMPD/$task/${stage}/state"
+    fi
   done
   return 0
 }
@@ -131,6 +134,9 @@ stageExec() {
      'purge') rv=$(stagePurge $task); rc=$? ;;
            *) error 1 stage "stage ${stage} unknown" ;;
   esac
+  if ! [[ $rc -eq 0 ]]; then
+    echo "clear" > "$STAMPD/$task/${stage}/state"
+  fi
   echo "$rv"
   return "$rc"
 }
@@ -158,7 +164,7 @@ stageSources() {
   else
     rv=$(bkendLs "$(tagValue dsrc)/$task" '*.dsc')
     if [[ $(wc -l <<< "$rv") -eq 1 ]]; then
-      echo "clear" > "$STAMPD/$task/${stage}/state"
+      # echo "clear" > "$STAMPD/$task/${stage}/state"
       logTask $task "sources loaded, dsc: $rv"
       logStatus "ok"
     else
@@ -212,7 +218,7 @@ stageTree() {
     echo "" >&2 # instead [ OK ]
   done
 
-  echo "clear" > "$STAMPD/$task/${stage}/state"
+  # echo "clear" > "$STAMPD/$task/${stage}/state"
   logTask $task "depends tree builded"
   return 0
 }
@@ -369,7 +375,7 @@ stageWalk() {
     logStatus "ok"
   fi
 
-  echo "clear" > "$STAMPD/$task/${stage}/state"
+  # echo "clear" > "$STAMPD/$task/${stage}/state"
   logTask $task "package list builded"
   return 0
 }
@@ -380,9 +386,8 @@ stageWalk() {
 #    $(stageDload <task>)"
 #
 # @arg `task` a build task
-stageDload() {
+stageDownload() {
   local task="$1"
-  echo "" >&2 # we give a lot of output
 
   local pstate_status=$(stageHas "$task" "walk")
   if [ $pstate_status != 'clear' ]; then
@@ -395,10 +400,12 @@ stageDload() {
     error 1 stage "no download script, see log"
   fi
   bkendCopy $(tagValue sh) $task "$STAMPD/$task/walk/$BREQ_PKGS_DLSH"
+  bkendExec "$task" "$(tagValue sh)" "chmod u+x $BREQ_PKGS_DLSH"
 
-  logHead "$task" "downloading debs ..."
+  # logHead "$task" "downloading debs ..."
 
-  local rv=$(bkendExec "$task" 'dbin' "sh -c ../../$task/$(tagValue sh)/$BREQ_PKGS_DLSH")
+  logTask "$task" "executing sh -c ../../$task/$(tagValue sh)/$BREQ_PKGS_DLSH at $task/$(tagValue dbin)"
+  local rv=$(bkendExec "$task" 'dbin' "sh -c ../../$(tagValue sh)/$task/$BREQ_PKGS_DLSH > /dev/null 2>&1")
   if [[ $rc -eq 1 ]]; then
     logStatus "err" "fail"
     logTask $task "fail to donwload debs: "
@@ -412,8 +419,92 @@ stageDload() {
     logStatus "ok"
   fi
 
-  echo "clear" > "$STAMPD/$task/${stage}/state"
+  # echo "clear" > "$STAMPD/$task/${stage}/state"
   logTask $task "all debs downloaded"
+  return 0
+}
+
+# @description Function to excute the "install" stage.
+#
+# @example
+#    $(stageInstall <task>)"
+#
+# @arg `task` a build task
+stageInstall() {
+  local task="$1"
+
+  local pstate_status=$(stageHas "$task" "dload")
+  if [ $pstate_status != 'clear' ]; then
+    logTask "$task" "previous stage 'walk' isnt clear, exitig"
+    error 1 stage "unclear previous stage (walk)"
+  fi
+
+  if ! [[ -f "$STAMPD/$task/walk/$BREQ_PKGS_ISH" ]]; then
+    logTask $task "install script $BREQ_PKGS_ISH not found, exiting"
+    error 1 stage "no install script, see log"
+  fi
+  bkendCopy $(tagValue sh) $task "$STAMPD/$task/walk/$BREQ_PKGS_ISH"
+  bkendExec "$task" "$(tagValue sh)" "chmod u+x $BREQ_PKGS_ISH"
+
+  logTask "$task" "executing $BKEND_SUCMD -c ../../$task/$(tagValue sh)/$BREQ_PKGS_ISH at $task/$(tagValue dbin)"
+  local rv=$(bkendExec "$task" 'dbin' "$BKEND_SUCMD -c ../../$(tagValue sh)/$task/$BREQ_PKGS_ISH  > /dev/null 2>&1")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "fail to install debs: "
+    logTask $task "--- $BREQ_PKGS_ISH ---"
+    logTask $task "$rv"
+    logTask $task "--- /$BREQ_PKGS_ISH ---"
+    error 1 stage "fail to install debs, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  # echo "clear" > "$STAMPD/$task/${stage}/state"
+  logTask $task "all debs installed"
+  return 0
+}
+
+# @description Function to excute the "install" stage.
+#
+# @example
+#    $(stageInstall <task>)"
+#
+# @arg `task` a build task
+stagePurge() {
+  local task="$1"
+
+  local pstate_status=$(stageHas "$task" "install")
+  # if [ $pstate_status != 'clear' ]; then
+  #   logTask "$task" "install stage isnt clear, exitig"
+  #   error 1 stage "unclear install stage"
+  # fi
+
+  if ! [[ -f "$STAMPD/$task/walk/$BREQ_PKGS_USH" ]]; then
+    logTask $task "uninstall script $BREQ_PKGS_USH not found, exiting"
+    error 1 stage "no uninstall script, see log"
+  fi
+  bkendCopy $(tagValue sh) $task "$STAMPD/$task/walk/$BREQ_PKGS_USH"
+  bkendExec "$task" "$(tagValue sh)" "chmod u+x $BREQ_PKGS_USH"
+
+  logTask "$task" "executing $BKEND_SUCMD -c ../../$task/$(tagValue sh)/$BREQ_PKGS_USH at $task/$(tagValue dbin)"
+  local rv=$(bkendExec "$task" 'dbin' "$BKEND_SUCMD -c ../../$(tagValue sh)/$task/$BREQ_PKGS_USH > /dev/null 2>&1")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "fail to purge debs: "
+    logTask $task "--- $BREQ_PKGS_USH ---"
+    logTask $task "$rv"
+    logTask $task "--- /$BREQ_PKGS_USH ---"
+    error 1 stage "fail to purge debs, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  # echo "clear" > "$STAMPD/$task/${stage}/state"
+  logTask $task "all debs purged"
   return 0
 }
 
