@@ -59,6 +59,34 @@ bkendLs() {
   echo "$rv"
 }
 
+# @description Function to cp.
+#
+# @arg dir - dir inside repo
+# @arg pattern - pattern
+#
+# @internal
+bkendCopy() {
+  [[ -n $SHDPKG_LCRUN ]] && lcrunCopy "$@"
+  [[ -n $SHDPKG_USEDOCKER ]] && dockerCopy "$@"
+}
+
+# @description Function to exec.
+#
+# @arg task - task name
+# @arg tag - dir tag
+# @arg cmd - command to execute
+#
+# @internal
+bkendExec() {
+  local rv rc=0
+  [[ -n $SHDPKG_LCRUN ]] && rv=$(lcrunExec "$@")
+  rc=$?
+  [[ -n $SHDPKG_USEDOCKER ]] && rv=$(dockerExec "$1/$(tagValue $2)" "$3")
+  rc=$?
+  echo "$rv"
+  return $rc
+}
+
 # @description Function to excute the source stage.
 #   Not using `bkendExec` (for pretty output reasons)
 #

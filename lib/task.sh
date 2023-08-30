@@ -110,15 +110,17 @@ taskReqs() {
 #
 # @exitcode 0 on success
 # @exitcode 1 on failure
+# @exitcode 2 success with issues
 #
 # @see [Vreq rewrite](./README.md#version-requrinments)
 taskSumVreq() {
   local task="$1"
-  local flatten="$BREQ_DIR/$task/$2"
-  local flatten_rw="$BREQ_DIR/$task/$3"
+  local flatten="$2"
+  local flatten_rw="$3"
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
   local comment_rg='s/^\(#.*\)$'
   local skip
+  local rc=0
 
   mapfile -t lines < "$flatten"
   for ((i=0; i<${#lines[@]}; ++i)); do #? i for lines
@@ -174,7 +176,8 @@ taskSumVreq() {
         local dst_provides=$(echo ${lines[$li]} | sed -n "$regexp/\3/p")
 
         if [[ -n "$dst_provides" ]]; then #! vreq looks strange 'libc6/>=2.14 libc6-2.25'
-          error 1 VERSUM "vreq contains provides at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+          logTask "$task" "vreq contains provides at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+          error 1 task "vreq contains provides at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
           return 1
         fi
 
@@ -188,9 +191,11 @@ taskSumVreq() {
 
           if [[ $errc -gt 0 ]] || [[ -z "$rw_bver" ]]; then #! empty vreq is also bad
             if [[ $errc -eq 2 ]]; then #! not implemented is not a caller problem
-              warning "$task" "not implemented compose with ${dst_bver:0:12}... with ${rw_bver:0:12}... at line $(( $li + 1 ))"
+              logTask "$task" "not implemented compose with ${dst_bver:0:12}... with ${rw_bver:0:12}... at line $(( $li + 1 ))"
+              rc=2
             else
-              error 1 VERSUM "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+              logTask "$task" "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+              error 1 task "fails to compose with $dst_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
               return 1
             fi
           fi
@@ -221,11 +226,13 @@ taskSumVreq() {
 
         if [[ -n "$node_bver"  ]]; then
           if [[ -z $(dverMatch "$rw_bver" "$node_bver") ]]; then
-            error 1 VERSUM "end point not matched $rw_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            logTask "$task" "end point not matched $rw_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            error 1 task "end point not matched $rw_bver at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
             return 1
           fi
           if [[ -n "$pnode_bver" ]] && [[ -z $(dverCmp "$pnode_bver" "$node_bver") ]]; then
-            error 1 VERSUM "mess in end point versions at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            logTask "$task" "mess in end point versions at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
+            error 1 task "mess in end point versions at line $(( $li + 1 )) '${lines[$li]:0:18}...'"
             return 1
           fi
           [[ -z "$pnode_bver" ]] && pnode_bver="$node_bver"
@@ -246,7 +253,7 @@ taskSumVreq() {
     echo "$line" >> "$flatten_rw"
   done
 
-  return 0
+  return $rc
 }
 
 # @description Function to contruct package chain.
@@ -301,8 +308,8 @@ taskMakeChain() {
 # @see [Vreq rewrite](./README.md#version-requrinments)
 taskUnalias() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local pkgs_out="$BREQ_DIR/$task/$3"
+  local pkgs_in="$2"
+  local pkgs_out="$3"
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
   local comment_rg='s/^\(#.*\)$'
   local skip
@@ -370,8 +377,8 @@ taskUnalias() {
 # @see [depends parsing](./README.md#-depends-parsing)
 taskFinalDepends() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local pkgs_out="$BREQ_DIR/$task/$3"
+  local pkgs_in="$2"
+  local pkgs_out="$3"
 
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
 
@@ -528,8 +535,8 @@ taskFinalDepends() {
 # @exitcode 1 on failure
 taskClearDepends() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local pkgs_out="$BREQ_DIR/$task/$3"
+  local pkgs_in="$2"
+  local pkgs_out="$3"
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
   local comment_rg='s/^#.*$//'
 
@@ -613,8 +620,8 @@ taskClearDepends() {
 # @exitcode 1 on failure
 taskFilterInstalled() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local pkgs_out="$BREQ_DIR/$task/$3"
+  local pkgs_in="$2"
+  local pkgs_out="$3"
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
   local comment_rg='s/^#.*$//'
 
@@ -690,8 +697,8 @@ taskFilterInstalled() {
 # @exitcode 1 on failure
 taskMkInstall() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local pkgs_out="$BREQ_DIR/$task/$3"
+  local pkgs_in="$2"
+  local pkgs_out="$3"
 
   local regexp='s/^\([0-9]\+\)\s\([^ ]\+\)\s\?\(.*\)$'
   local comment_rg='s/^#.*$//'
@@ -748,8 +755,8 @@ taskMkInstall() {
 # @exitcode 1 on failure
 taskDload() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local pkgs_out="$BREQ_DIR/$task/$3"
+  local pkgs_in="$2"
+  local pkgs_out="$3"
   local shebang="#!/usr/bin/env bash\n"
   local cmd_start="res=\`"
   local cmd_end="\`"
@@ -793,17 +800,17 @@ taskDload() {
   local script=(${pkgs_out//'/'/ })
   script="${script[-1]}"
 
-  #? copy script
-  res=$(dockerMakeDir "$(tagValue sh)/${task}/")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  res=$(dockerMakeDir "$(tagValue dbin)/${task}/")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  res=$(dockerCopy "sh" "$task" "$pkgs_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
+  # #? copy script
+  # res=$(dockerMakeDir "$(tagValue sh)/${task}/")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
+  # res=$(dockerMakeDir "$(tagValue dbin)/${task}/")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
+  # res=$(dockerCopy "sh" "$task" "$pkgs_out")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
 
-  #? executing script
-  res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$script")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
+  # #? executing script
+  # res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$script")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
 
   return 0
 }
@@ -814,6 +821,7 @@ taskDload() {
 #    $(taskDebInstall <task> <in> <install> <uninstall>)
 #
 # @arg `task` a build task.
+# @arg `in` a package list file.
 # @arg `install` a name of install script
 # @arg `uninstall` a name of uninstall script
 #
@@ -821,105 +829,10 @@ taskDload() {
 # @exitcode 1 on failure
 taskDebInstall() {
   local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local ish_out="$BREQ_DIR/$task/$3"
-  local ush_out="$BREQ_DIR/$task/$4"
-  local lsh_out="$BREQ_DIR/$task/$4"
-
-  local shebang="#!/usr/bin/env bash\n"
-  local icmd_start="res=\`"
-  local icmd_end="\`"
-  local imid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
-  local iend="\nexit 0"
-  local ucmd_start="res=\`"
-  local ucmd_end="\`"
-  local umid='[[ $? -gt 0 ]] && echo "$res" && exit 1'
-  local uend="\nexit 0"
-  local lcmd_start="file=\`"
-  local lcmd_end="\`"
-  local lmid='[[ -f "\$file" ]] || echo "\$file" && exit 1'
-  local lend="\nexit 0"
-
-  echo -e "$shebang" >> "$ish_out"
-  echo -e "$shebang" >> "$ush_out"
-  echo -e "$shebang" >> "$lsh_out"
-
-  mapfile -t lines < "$pkgs_in"
-  for ((i=0; i<${#lines[@]}; ++i)); do
-    local pa=(${lines[$i]})
-    if [[ ${#pa[@]} -gt 1 ]]; then #? cycle
-      echo "# cycle" >> "$ish_out"
-      echo "# cycle" >> "$ush_out"
-      echo "# cycle" >> "$lsh_out"
-      echo -n "${icmd_start}dpkg -i " >> "$ish_out"
-      echo -n "${ucmd_start}dpkg --purge " >> "$ush_out"
-      echo -n "${lcmd_start}" >> "$lsh_out"
-      for ((j=0; j<${#pa[@]}; ++j)); do
-        local fname=$(bspecFile ${pa[$j]})
-        local bname=$(bspecName ${pa[$j]})
-        [[ -z $fname || $? -gt 0 ]] && return 1
-        echo -n "${fname}" >> "$ish_out"
-        echo -n "${bname}" >> "$ush_out"
-        echo -n "${fname}" >> "$lsh_out"
-        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$ish_out"
-        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$ush_out"
-        [[ $j -lt $(( ${#pa[@]} - 1 )) ]] && echo -n " " >> "$lsh_out"
-      done
-      echo "${icmd_end}" >> "$ish_out"
-      echo "${ucmd_end}" >> "$ush_out"
-      echo "${lcmd_end}" >> "$lsh_out"
-      echo "${imid}" >> "$ish_out"
-      echo "${umid}" >> "$ush_out"
-      echo "${lmid}" >> "$lsh_out"
-      echo "# /cycle" >> "$ish_out"
-      echo "# /cycle" >> "$ush_out"
-      echo "# /cycle" >> "$lsh_out"
-    else #? pkg
-      local fname=$(bspecFile ${pa[0]})
-      local bname=$(bspecName ${pa[0]})
-      [[ -z $fname || $? -gt 0 ]] && return 1
-      echo "${icmd_start}dpkg -i ${fname}${icmd_end}" >> "$ish_out"
-      echo "${ucmd_start}dpkg --purge ${bname}${ucmd_end}" >> "$ush_out"
-      echo "${lcmd_start}${fname}${ucmd_end}" >> "$lsh_out"
-      echo "${imid}" >> "$ish_out"
-      echo "${umid}" >> "$ush_out"
-      echo "${lmid}" >> "$lsh_out"
-    fi
-  done
-  echo -e "$iend" >> "$ish_out"
-  echo -e "$uend" >> "$ush_out"
-  echo -e "$lend" >> "$lsh_out"
-
-  local res
-  local iscript=(${ish_out//'/'/ }); iscript="${iscript[-1]}"
-  local uscript=(${ush_out//'/'/ }); uscript="${uscript[-1]}"
-  local lscript=(${lsh_out//'/'/ }); lscript="${lscript[-1]}"
-
-  # #? copy scripts
-  res=$(dockerCopy "sh" "$task" "$ish_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  res=$(dockerCopy "sh" "$task" "$ush_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  res=$(dockerCopy "sh" "$task" "$lsh_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-
-  # #? executing script
-  # checks downloaded files
-  res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$lscript")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  # install packages
-  # res=$(dockerDirExec "$(tagValue dbin)/$task" "sh ../../$(tagValue sh)/$task/$iscript")
-  # [[ $? -gt 0 ]] && echo "$res" && return 1
-
-  return 0
-}
-
-taskDebInstallTest() {
-  local task="$1"
-  local pkgs_in="$BREQ_DIR/$task/$2"
-  local ish_out="$BREQ_DIR/$task/$3"
-  local ush_out="$BREQ_DIR/$task/$4"
-  local lsh_out="$BREQ_DIR/$task/$5"
+  local pkgs_in="$2"
+  local ish_out="$3"
+  local ush_out="$4"
+  local lsh_out="$5"
 
   local shebang="#!/usr/bin/env bash\n"
 
@@ -1006,13 +919,13 @@ taskDebInstallTest() {
   local uscript=(${ush_out//'/'/ }); uscript="${uscript[-1]}"
   local lscript=(${lsh_out//'/'/ }); lscript="${lscript[-1]}"
 
-  # #? copy scripts
-  res=$(dockerCopy "sh" "$task" "$ish_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  res=$(dockerCopy "sh" "$task" "$ush_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
-  res=$(dockerCopy "sh" "$task" "$lsh_out")
-  [[ $? -gt 0 ]] && echo "$res" && return 1
+  # # #? copy scripts
+  # res=$(dockerCopy "sh" "$task" "$ish_out")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
+  # res=$(dockerCopy "sh" "$task" "$ush_out")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
+  # res=$(dockerCopy "sh" "$task" "$lsh_out")
+  # [[ $? -gt 0 ]] && echo "$res" && return 1
 
   # #? executing script
   # checks downloaded files

@@ -68,6 +68,26 @@ dockerRm() {
   done
 }
 
+# @description Function to copy file to guest FS.
+#
+# @example
+#    $(dockerCopy <tag> <task> <file>)
+#
+# @arg tag - place tag
+# @arg task - a task name
+# @arg file - a file name to copy
+#
+# @internal
+dockerCopy() {
+  local retval tag="$1" task="$2"
+  local file=(${3//'/'/ })
+  file="${file[-1]}"
+  retval=$(docker cp "$3" "${DC_NAME}:${DC_REPO}/$(tagValue $tag)/${task}/${file}")
+  local errc=$?
+  echo "$retval"
+  return $errc
+}
+
 # @description get /proc path for tag: dockerPath <dir>
 #
 # @arg dir - dir relative to repo
@@ -104,7 +124,7 @@ dockerLs() {
 
 # region #? top level
 
-# @description Function to excute the source stage.
+# @description Function to excute the `apt-get source`.
 #              Not using `dockerExec` (for pretty output reasons)
 #
 # @example
@@ -124,6 +144,13 @@ dockerAptSources() {
 # region #! old part
 
 # excute apt-cache show: dockerAptCache <pkg>
+# @description Function to excute the `apt-get source`.
+#              Not using `dockerExec` (for pretty output reasons)
+#
+# @example
+#    $(dockerAptSources <task>)"
+#
+# @arg `task` a build task
 dockerAptCache() {
   local pkg="$1"
   local str=$(docker exec -u $DC_USER:$DC_GROUP -it $DC_NAME sh -c "apt-cache show $pkg")
@@ -166,17 +193,6 @@ dockerDpkgStatus() {
   [[ -z "$retval" ]] && return 1
   echo "$retval"
   return 0
-}
-
-# copy file to guest FS: dockerCopy <tag> <task> <file>
-dockerCopy() {
-  local retval tag="$1" task="$2"
-  local file=(${3//'/'/ })
-  file="${file[-1]}"
-  retval=$(docker cp "$3" "${DC_NAME}:${DC_REPO}/$(tagValue $tag)/${task}/${file}")
-  local errc=$?
-  echo "$retval"
-  return $errc
 }
 
 # endregion

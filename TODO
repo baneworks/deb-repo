@@ -109,7 +109,7 @@ bash-builder:
       ✔ breq.sh @done(23-08-31 02:55)
       ✔ bspec.sh @done(23-08-31 03:00)
       ☐ build.sh
-      ☐ debver.sh
+      ✔ debver.sh @done(23-08-31 03:33)
       ☐ docker.sh
       ☐ globals.sh
       ☐ lcrun.sh

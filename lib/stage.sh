@@ -173,10 +173,11 @@ stageSources() {
   return 0
 }
 
-# @description Function to excute the source stage.
+# @description Function to excute the "tree" stage. On this stage
+#              dependency tree are built
 #
 # @example
-#    $(stageExec <task>)"
+#    $(stageTree <task>)"
 #
 # @arg `task` a build task
 stageTree() {
@@ -213,6 +214,207 @@ stageTree() {
 
   echo "clear" > "$STAMPD/$task/${stage}/state"
   logTask $task "depends tree builded"
+  return 0
+}
+
+# @description Function to excute the "walk" stage. During this stage:
+#              1. Calling (taskSumVReq)[./task#taskSumVReq] to summarize
+#                 all of version constrains.
+#              2. Unspin cycles and return ready to install packages
+#                 list with suitable version specification.
+#                 See (taskFinalDepends)[./task#taskFinalDepends]
+#              4. Unalias virtual packages to its providers calling
+#                 (taskUnalias)[./task#taskUnalias].
+#              5. Another call of `taskSumVreq`, and i not shure why.
+#                 will check it later.
+#              6. Do some cleanup (taskClearDepends)[./task#taskClearDepends]
+#              7. Filter installed (taskFilterInstalled)[./task#taskFilterInstalled]
+#              8. Generate `dload.sh`, `install.sh`, `uninstall.sh`.
+#                 See (taskMkInstall)[./task#taskMkInstall]
+#
+# @example
+#    $(stageWalk <task>)"
+#
+# @arg `task` a build task
+stageWalk() {
+  local task="$1" rc
+  echo "" >&2 # we give a lot of output
+
+  local pstage_state=$(stageHas "$task" "tree")
+  if [ $pstage_state != 'clear' ]; then
+    logTask "$task" "previous stage 'tree' isnt clear, exitig"
+    error 1 stage "unclear previous stage (tree)"
+  fi
+
+  logHead $task "composing version's requrenments ..."
+
+  if ! [[ -f "$STAMPD/$task/tree/$BREQ_FLATTEN" ]]; then
+    logTask $task "depends description file $BREQ_FLATTEN not found, exiting"
+    error 1 stage "no depends description file, see log"
+  fi
+  rc=$(taskSumVreq "$task" "$STAMPD/$task/tree/$BREQ_FLATTEN" "$STAMPD/$task/walk/$BREQ_FLATTEN_RW")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "can't compose version's requrenments, exiting"
+    error 1 stage "can't compose version's requrenments, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "depends finalisation ..."
+
+  rc=$(taskFinalDepends "$task" "$STAMPD/$task/walk/$BREQ_FLATTEN_RW" "$STAMPD/$task/walk/$BREQ_PKGS")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "can't finalize depends, exiting"
+    error 1 stage "can't finalize depends, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "solving virtuals ..."
+
+  rc=$(taskUnalias "$task" "$STAMPD/$task/walk/$BREQ_PKGS" "$STAMPD/$task/walk/$BREQ_PKGS_UNALIAS")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "can't substitute virtuals, exiting"
+    error 1 stage "can't substitute virtuals, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  # fixme: needed?
+  logHead $task "composing version's requrenments ..."
+
+  rc=$(taskSumVreq "$task" "$STAMPD/$task/walk/$BREQ_PKGS_UNALIAS" "$STAMPD/$task/walk/$BREQ_PKGS_RW")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "composing version's requrenments (2nd run) failed, exiting"
+    error 1 stage "can't compose version's requrenments, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "cleaning list ..."
+
+  rc=$(taskClearDepends "$task" "$STAMPD/$task/walk/$BREQ_PKGS_RW" "$STAMPD/$task/walk/$BREQ_PKGS_CLR")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "clearing package list failed, exiting"
+    error 1 stage "can't clear package list, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "filter installed ..."
+
+  rc=$(taskFilterInstalled "$task" "$STAMPD/$task/walk/$BREQ_PKGS_CLR" "$STAMPD/$task/walk/$BREQ_PKGS_INST")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "clearing of installed packages failed, exiting"
+    error 1 stage "can't drop installed packages, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "package install list ..."
+
+  rc=$(taskMkInstall "$task" "$STAMPD/$task/walk/$BREQ_PKGS_INST" "$STAMPD/$task/walk/$BREQ_PKGS_INST_FLT")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "creation of package installation list failed, exiting"
+    error 1 stage "can't make package installation list, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "generating dowload sripts ..."
+
+  rc=$(taskDload "$task" "$STAMPD/$task/walk/$BREQ_PKGS_INST_FLT" "$STAMPD/$task/walk/$BREQ_PKGS_DLSH")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "fail to generate 'dload.sh', exiting"
+    error 1 stage "can't make download script, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  logHead $task "generating install/uninstall & check sripts ..."
+
+  bkendMkDir "" "$(tagValue sh)"
+  rc=$(taskDebInstall "$task" "$STAMPD/$task/walk/$BREQ_PKGS_INST_FLT" "$STAMPD/$task/walk/$BREQ_PKGS_ISH" "$STAMPD/$task/walk/$BREQ_PKGS_USH" "$STAMPD/$task/walk/$BREQ_PKGS_LSH")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "fail to generate 'install.sh', 'uninstall.sh', 'fcheck.sh', exiting"
+    error 1 stage "can't make install/uninstall scripts, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  echo "clear" > "$STAMPD/$task/${stage}/state"
+  logTask $task "package list builded"
+  return 0
+}
+
+# @description Function to excute the "dload" stage.
+#
+# @example
+#    $(stageDload <task>)"
+#
+# @arg `task` a build task
+stageDload() {
+  local task="$1"
+  echo "" >&2 # we give a lot of output
+
+  local pstate_status=$(stageHas "$task" "walk")
+  if [ $pstate_status != 'clear' ]; then
+    logTask "$task" "previous stage 'walk' isnt clear, exitig"
+    error 1 stage "unclear previous stage (walk)"
+  fi
+
+  if ! [[ -f "$STAMPD/$task/walk/$BREQ_PKGS_DLSH" ]]; then
+    logTask $task "download script $BREQ_PKGS_DLSH not found, exiting"
+    error 1 stage "no download script, see log"
+  fi
+  bkendCopy $(tagValue sh) $task "$STAMPD/$task/walk/$BREQ_PKGS_DLSH"
+
+  logHead "$task" "downloading debs ..."
+
+  local rv=$(bkendExec "$task" 'dbin' "sh -c ../../$task/$(tagValue sh)/$BREQ_PKGS_DLSH")
+  if [[ $rc -eq 1 ]]; then
+    logStatus "err" "fail"
+    logTask $task "fail to donwload debs: "
+    logTask $task "--- $BREQ_PKGS_DLSH ---"
+    logTask $task "$rv"
+    logTask $task "--- /$BREQ_PKGS_DLSH ---"
+    error 1 stage "fail to donwload debs, see log"
+  elif [[ $rc -eq 2 ]]; then
+    logStatus "warn" "issue"
+  else
+    logStatus "ok"
+  fi
+
+  echo "clear" > "$STAMPD/$task/${stage}/state"
+  logTask $task "all debs downloaded"
+  return 0
 }
 
 # endregion

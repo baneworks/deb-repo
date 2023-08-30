@@ -59,6 +59,43 @@ lcrunLs() {
   echo `/usr/bin/env ls $LC_REPO/$1/$2`
 }
 
+# @description Function to copy file to guest FS.
+#
+# @example
+#    $(lcrunCopy <tag> <task> <file>)
+#
+# @arg tag - place tag
+# @arg task - a task name
+# @arg file - a file name to copy
+#
+# @internal
+lcrunCopy() {
+  local retval tag="$1" task="$2"
+  local file=(${3//'/'/ })
+  file="${file[-1]}"
+  retval=$(cp "$3" "$LC_REPO/$(tagValue $tag)/${task}/${file}")
+  local errc=$?
+  echo "$retval"
+  return $errc
+}
+
+# @description Function exec command inside specified dir.
+#
+# @arg task - task name
+# @arg tag - dir tag
+# @arg cmd - command to execute
+#
+# @internal
+lcrunExec() {
+  local task="$1" wdir=$(tagValue $2) cwd=`pwd`
+  cd "$LC_REPO/$wdir"
+  local rv=$(sh -c "$3")
+  local rc=$?
+  cd "$cwd"
+  echo "$rv"
+  return "$rc"
+}
+
 # endregion
 
 # region #? top level
