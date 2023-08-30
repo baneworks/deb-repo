@@ -2,17 +2,6 @@
 # @file build
 # @brief Functions to build a task.
 
-# init build process
-buildInit() {
-  [[ -z $(dockerInit) ]] && return 1
-
-  # fixme: ugly
-  # fixme: test mode
-  info buildInit "--- test mode ---"
-  # guestClearFHS
-  # guestCreateFHS
-}
-
 # build task: buildTask <task>
 buildTask() {
   local task="$1"
@@ -103,14 +92,4 @@ buildTask() {
   taskDebInstallTest "$task" "$BREQ_PKGS_INST_FLT" "$BREQ_PKGS_ISH" "$BREQ_PKGS_USH" "$BREQ_PKGS_LSH"
   [[ $? -gt 0 ]] && error 1 DPKG "install debs failed"
 
-}
-
-# build all tasks: buildAll
-buildAll() {
-  buildInit || return 1
-  for task in $(taskList); do
-    buildTask "$task"
-    # fixme: test mode
-    break
-  done
 }

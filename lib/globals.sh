@@ -23,29 +23,34 @@ TAG_SH="sh"
 TAG_DBIN="bin"
 TAG_DSRC="src"
 TAG_OUT="out"
-TAG_TMP="tmp"
+TAG_LOG="log"
 TAG_TREE=".btree"
 
 #! repo
 REPO_NAME="sh-dpkg" # todo: confugure.in
 
-#! docker run
+#! docker specific
 DC_NAME="debian"
 DC_USER="mtain"
 DC_GROUP="users"
-DC_RERO_DIR="/var/tmp" # todo: confugure.in
-DC_REPO="$DC_RERO_DIR/$REPO_NAME"
+
+#! docker run
+DC_REPO_ROOT="/var/tmp" # todo: confugure.in
+DC_REPO="$DC_REPO_ROOT/$REPO_NAME"
 DC_SUCMD="su -c '$cmd'"
 
 #! local run
-LC_REPO_DIR="/var/tmp/"
-LC_REPO="$LC_REPO_DIR/$REPO_NAME" # todo: confugure.in
-LC_TREE="$LC_REPO/$TAG_TREE"
+LC_REPO_ROOT="/var/tmp"
+LC_REPO="$LC_REPO_ROOT/$REPO_NAME" # todo: confugure.in
 LC_SUCMD="su -c '$cmd'"
+LC_TREE="$LC_REPO/$TAG_TREE" #? TREE is always local
+
+#! stamps
+STAMPD="$LC_REPO/.stages"
+STAGES=('source' 'tree' 'walk' 'dload' 'inst' 'deb' 'purge')
 
 # todo: implement switchable repo
 REPO="$DC_REPO" # fixme: temporary
-TREE="$REPO/$TAG_BTREE"
 
 # todo: drop
 TAG_TREE_DIR="$REPO/$TAG_TREE"   #? "tree"
@@ -53,7 +58,7 @@ TAG_SH_DIR="$REPO/$TAG_SH"       #? "sh"
 TAG_DBIN_DIR="$REPO/$TAG_DBIN"   #? "dbin"
 TAG_DSRC_DIR="$REPO/$TAG_DSRC"   #? "dsrc"
 TAG_OUT_DIR="$REPO/$TAG_OUT"     #? "out"
-TAG_TMP_DIR="$REPO/$TAG_TMP"     #? "tmp"
+TAG_LOG_DIR="$REPO/$TAG_LOG"     #? "tmp"
 
 #! flatten file
 BREQ_FLATTEN=".flatten-in"

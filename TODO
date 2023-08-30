@@ -3,7 +3,7 @@ environment:
     ✔ instal @done(23-07-30 02:30)
     ✘ is working @cancelled(23-08-01 17:53)
       ✘ fix fakechroot issues @cancelled(23-08-01 17:53)
-  ☐ prepare nix develop shell
+  ☐ nix develop shell
     ✔ container generation @done(23-07-31 01:41)
     ✔ add apt-sources @done(23-08-13 04:50)
     ☐ shell for make-repo
@@ -71,17 +71,17 @@ bash-builder:
     ☐ package builder
       ✔ name of package @done(23-08-29 22:06)
       ✔ vars to global @done(23-08-29 22:08)
-      ☐ sh-dpkg
-      ☐ build targets co command line
+      ✔ sh-dpkg @done(23-08-29 23:35)
+      ✔ build targets from command line @done(23-08-31 02:38)
       ☐ libs to /usr/share/
       ☐ switches
-        ☐ type of excution (local | docker)
+        ✔ type of excution (local | docker) @done(23-08-31 02:43)
         ☐ --libs
         ☐ --out
         ☐ --var
-      ☐ commands
-        ☐ source (init + source)
-        ☐ tree
+      ✔ commands @done(23-08-31 02:38)
+        ✔ source (init + source) @done(23-08-31 02:38)
+        ✔ tree @done(23-08-31 02:38)
         ☐ dload
         ☐ install
         ☐ binary
@@ -97,7 +97,7 @@ bash-builder:
       ✔ versions req '>' '<' case @done(23-08-25 02:43)
       ☐ dverCmp left <-> right op change
       ✔ if root node hasn't deps - it not added to .flatten @done(23-08-28 02:30)
-      ☐ bspecVersionHR 'perl-base/5.32.1-4+deb11u2' => ""
+      ✔ bspecVersionHR 'perl-base/5.32.1-4+deb11u2' => "" @done(23-08-31 02:46)
       ☐ bspecVersion & bspecVersionHR to one
       ☐ flat installs to chained
       ☐ apt-get source add --download-only
@@ -105,16 +105,18 @@ bash-builder:
         ✔ debconf empty provides @done(23-08-29 14:15)
         ✔ perlapi-5.32.0 @done(23-08-29 14:15)
     ☐ document
-      ☐ bspec-lib
-      ☐ build-lib
-      ☐ docker-lib
-      ☐ log-lib
-      ☐ make-repo
-      ☐ tag-lib
-      ☐ task-lib
-      ☐ test-lib
-      ☐ generate
-      ☐ update github
+      ✔ bkend.sh @done(23-08-31 02:50)
+      ✔ breq.sh @done(23-08-31 02:55)
+      ✔ bspec.sh @done(23-08-31 03:00)
+      ☐ build.sh
+      ☐ debver.sh
+      ☐ docker.sh
+      ☐ globals.sh
+      ☐ lcrun.sh
+      ☐ log.sh
+      ☐ stage.sh
+      ☐ test.sh
+      ☐ github docs
     ☐ speedups
       ☐ drop apt-cache depends
       ☐ seenBefore

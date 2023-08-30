@@ -16,7 +16,7 @@ error() {
 	tag="$2"
 	msg="$3"
 	shift; shift; shift
-	(printf "${COLOR_RED}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
+	(printf "\n${COLOR_RED}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
 	exit $err
 }
 

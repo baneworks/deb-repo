@@ -2,16 +2,22 @@
 # @file log
 # @brief Function for a looging.
 
+# region #? general
+
+# @ description print error message and exit: <task> <message>
+# @internal
 error() {
 	local err tag msg
 	err="$1"
 	tag="$2"
 	msg="$3"
 	shift; shift; shift
-	(printf "${COLOR_RED}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
+	(printf "\n${COLOR_RED}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
 	exit $err
 }
 
+# @ description print warning message: <task> <message>
+# @internal
 warning() {
   local tag msg
 	tag="$1"
@@ -20,6 +26,8 @@ warning() {
 	(printf "${COLOR_YELLOW}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
 }
 
+# @ description print info message: <task> <message>
+# @internal
 info() {
   local tag msg
 	tag="$1"
@@ -28,12 +36,32 @@ info() {
 	(printf "${COLOR_GREEN}[$tag]${COLOR_OFF}: $msg\n" "$@") >&2
 }
 
-# region #? breq log funcs
-
-# fixme: breqPrintMsg is ugly - rewrite
-# print node tag: breqPrintName <level> <@bnames> <message>"
+# @ description print head message: <task> <message>
 # @internal
-breqPrintName() {
+logHead() {
+  (printf "${COLOR_OFF}[${COLOR_GREEN}$1${COLOR_OFF}] $2") >&2
+}
+
+# @ description print status message: status <status> <message>
+# @internal
+logStatus() {
+  case "$1" in
+       'ok') (printf " [${COLOR_GREEN}OK${COLOR_OFF}]\n") >&2 ;;
+     'note') (printf " [${COLOR_GRAY}$2${COLOR_OFF}]\n") >&2 ;;
+     'warn') (printf " [${COLOR_YELLOW}$2${COLOR_OFF}]\n") >&2 ;;
+      'err') (printf " [${COLOR_RED}$2${COLOR_OFF}]\n") >&2 ;;
+          *) (printf " [${COLOR_RED}$1:$2${COLOR_OFF}]\n") >&2 ;;
+  esac
+}
+
+# endregion
+
+# region #? tabbed
+
+# fixme: ugly
+# @description Print tabbed node tag: logTabHead <level> <@bnames> <message>"
+# @internal
+logTabHead() {
   local lvl="$1"
   IFS="/" read -ra pth <<< "$2"
 
@@ -53,12 +81,10 @@ breqPrintName() {
   return
 }
 
-# print status message: breqPrintStatus <level> <status> <message>
+# @description Print tabbed status message: logTabStatus <level> <status> <message>
 # @internal
-breqPrintStatus() {
-  local lvl=$1
-  shift
-  local tail
+logTabStatus() {
+  local lvl="$1"; shift
   [[ $lvl -eq 1 ]] && nl="\n"
   case "$1" in
        'ok') [[ $lvl -eq 1 ]] && (printf " [${COLOR_GREEN}OK${COLOR_OFF}]$nl") >&2 || (printf "") >&2 ;;
@@ -71,14 +97,24 @@ breqPrintStatus() {
   esac
 }
 
-# replicate string: breqRepStr <count> <pre> <str> <post>
+# @description Replicate string: logRepStr <count> <pre> <str> <post>
 # @internal
-breqRepStr() {
+logRepStr() {
   local res="$2"
   for ((i=0; i<"$1"; i++)); do
     res="${res}$3"
   done
   echo "${res}$4"
+}
+
+# endregion
+
+# region #? journal
+
+# @ description add line to task log: <task> <message>
+# @internal
+logTask() {
+  bkendWrite "$(tagValue log)/$1.log" "$2"
 }
 
 # endregion

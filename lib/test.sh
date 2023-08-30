@@ -14,17 +14,17 @@ fi
 
 # return true if global test mode enabled
 isTestEnabled() {
-  [[ -n TEST_ENABLE ]] && echo "1" || echo ""
+  [[ -n ${TEST_ENABLE} ]] && echo "1" || echo ""
 }
 
 isSamplesEnabled() {
-  [[ -n TEST_SAMPLES ]] && echo "1" || echo ""
+  [[ -n ${TEST_SAMPLES} ]] && echo "1" || echo ""
 }
 
 # initialize tests - files, variables, etc
 testInit() {
-  if [[ $(isTestEnabled) ]]; then
-    if [[ $(isSamplesEnabled) ]]; then
+  if [[ -n $(isTestEnabled) ]]; then
+    if [[ -n $(isSamplesEnabled) ]]; then
       [[ -f "$TSMPL_VER" ]] && rm -f "$TSMPL_VER"
       touch "$TSMPL_VER"
       [[ -f "$TSMPL_VREQ" ]] && rm -f "$TSMPL_VREQ"

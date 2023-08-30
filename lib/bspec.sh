@@ -2,25 +2,63 @@
 # @file bspec
 # @brief Function to work with package specifications.
 
-# return name part from bspec: bspecName <breq_spec>
+# @description Return name part from bspec.
+#
+# @example
+#    $(bspecName <breq_spec>)
+#
+# @arg package spec
+#
+# @stdout package name
+#
+# @internal
 bspecName() {
   local bname=(${1//'/'/ })
   echo "${bname[0]}"
 }
 
-# return version part from bspec: bspecVersion <breq_spec>
+# todo: compose with bspecVersionHR
+# @description Return version part from bspec.
+#
+# @example
+#    $(bspecVersion <breq_spec>)
+#
+# @arg package spec
+#
+# @stdout package version
+#
+# @internal
 bspecVersion() {
   local bver=(${1//'/'/ })
   echo "${bver[1]}"
 }
 
-# return version in readabe form: bspecVersionHR <breq_spec>
+# @description Return version part from bspec in human readable format.
+#
+# @example
+#    $(bspecVersionHR <breq_spec>)
+#
+# @arg package spec
+#
+# @stdout package version
+#
+# @internal
 bspecVersionHR() {
   local bver=(${1//'/'/ })
   echo $(sed -n 's/\([<>=]\+\)/\1 /pg' <<< "${bver[1]}")
 }
 
-# return filename from bspec: bspecFile <breq_spec> [arch]
+# @description Return package file name from bspec.
+#
+# @example
+#    $(bspecFile <breq_spec> [arch])
+#
+# @arg package spec
+# @arg arch of package, if ommited - `apt-cache show` will be called
+#
+# @stdout package version
+#
+# @internal
 bspecFile() {
   local bname=(${1//'/'/ })
   local bver="${bname[1]}"

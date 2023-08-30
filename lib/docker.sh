@@ -2,71 +2,126 @@
 # @file docker
 # @brief The docker backend.
 
-# get container pid
+# region #? low level
+
+# @description get container pid.
+# @internal
 function dockePid() {
   local pid=$(docker inspect -f '{{.State.Pid}}' $DC_NAME)
   if [[ $pid -le 1 ]]; then
-   error 1 NOCONTAINER "no debian container running"
+   error 1 docker "no debian container running"
    return 1
   fi
   echo "$pid"
 }
 
+# @description init module.
+# @internal
 dockerInit() {
-  declare GUEST_PID=$(dockePid)
-  [[ GUEST_PID -le 1 ]] && (echo ""; return 1)
-  echo "true"
+  GUEST_PID=$(dockePid)
+  [[ $GUEST_PID -le 1 ]] && (echo ""; return 1)
+  echo "$GUEST_PID"
 }
 
-# get /proc path for tag: dockerRelativePath <tag> <path>
-function dockerRelativePath() {
-  local dir
-  if [ -z $1 ]; then
-    dir="/proc/$GUEST_PID/root/$DC_REPO"
-  elif [ -z $2 ]; then
-    dir="/proc/$GUEST_PID/root/$DC_REPO/$(tagValue $1)"
-  else
-    dir="/proc/$GUEST_PID/root/$DC_REPO/$(tagValue $1)/$2"
-  fi
-  echo $dir
-}
-
-# create repo dir $REPO_NAME
-dockerMakeRepoDir() {
-  docker exec -u $DC_USER:$DC_GROUP -w "/home/$DC_USER" $DC_NAME mkdir $(tagValue "repo" )
-}
-
-# remove whole repo $REPO_NAME
-dockerRmRepo() {
-  docker exec -u $DC_USER:$DC_GROUP -w "/home/$DC_USER" $DC_NAME rm -Rf $(tagValue "repo" )
-}
-
-# execute docker command inside $REPO_NAME: dockerExec <command>
+# @description Function exec docker command inside specified dir.
+#
+# @arg dir - dir relative to repo
+# @arg cmd - command to execute
+#
+# @internal
 dockerExec() {
-  docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO" $DC_NAME $@
+  local dir="$1"; shift
+  docker exec -u $DC_USER:$DC_GROUP -w "$DC_REPO/$dir" $DC_NAME sh -c "$@"
 }
 
-# execute docker command inside dir: dockerDirExec <dir> <command>
-dockerDirExec() {
-  local reldir
-  reldir=$1
-  shift;
-  docker exec -u $DC_USER:$DC_GROUP -w "/$DC_REPO/$reldir/" $DC_NAME $@
+# @description Function to create repo dir. Safe
+#
+# @internal
+dockerMkRepo() {
+  docker exec -u $DC_USER:$DC_GROUP $DC_NAME mkdir -p "$DC_REPO"
 }
 
-#* only for pretty output
-# excute apt-get sources: dockerAptSources <task>
+# @description Function to create dir inside repo. Safe.
+#
+# @arg parent - parent dir relative to repo
+# @arg dir - dir relative to repo
+#
+# @internal
+dockerMkDir() {
+  local pd="$1"; shift
+  for d in "$@"; do
+    [[ -d $(dockerPath "$pd/$d") ]] || dockerExec "$pd" "mkdir -p $d"
+  done
+}
+
+# @description Function to create dir inside repo. Unsafe.
+#
+# @arg parent - parent dir relative to repo
+# @arg obj - dir or file to remove (relative to repo)
+#
+# @internal
+dockerRm() {
+  local pd="$1"; shift
+  for obj in "$@"; do
+    [[ -d $(dockerPath "$pd/$obj") ]] && dockerExec "$pd" "rm -rf $obj"
+    [[ -f $(dockerPath "$pd/$obj") ]] && dockerExec "$pd" "rm -f $obj"
+  done
+}
+
+# @description get /proc path for tag: dockerPath <dir>
+#
+# @arg dir - dir relative to repo
+#
+# @internal
+function dockerPath() {
+  echo "/proc/${GUEST_PID}/root${DC_REPO}/$1"
+}
+
+# @description Function to write to file.
+#
+# @arg file - file relative to repo
+# @arg msg - mesage
+#
+# @internal
+dockerWrite() {
+  local cmd="echo '""$2""' >> $DC_REPO/""$1"
+  dockerExec "" "$cmd"
+}
+
+# @description Function to ls.
+#
+# @arg dir - dir inside repo
+# @arg pattern - pattern
+#
+# @internal
+dockerLs() {
+  local cmd="$(dockerPath $1)/$2"
+  local rv=`/usr/bin/env ls $cmd`
+  echo "$rv"
+}
+
+# endregion
+
+# region #? top level
+
+# @description Function to excute the source stage.
+#              Not using `dockerExec` (for pretty output reasons)
+#
+# @example
+#    $(dockerAptSources <task>)"
+#
+# @arg `task` a build task
 dockerAptSources() {
-  local task wdir retval
-  task=$1
-  shift;
-  wdir=$(tagValue 'dsrc')
-  wdir="/$DC_REPO/$wdir"
-  wdir="$wdir/$task"
-  retval=$(docker exec -u $DC_USER:$DC_GROUP -w $wdir -it $DC_NAME sh -c "apt-get source -q -d $task 1> /dev/null; exit $?")
-  [[ $retval != "" ]] && retval="-1"
-  echo "$retval"
+  local task="$1" wdir=$(tagValue dsrc)
+  local rv=$(docker exec -u $DC_USER:$DC_GROUP -w "$DC_REPO/$wdir/$task" -it $DC_NAME sh -c "apt-get source -q -d $task 1> /dev/null; exit $?")
+  local rc=$?
+  echo "$rv"
+  return "$rc"
 }
+
+# endregion
+
+# region #! old part
 
 # excute apt-cache show: dockerAptCache <pkg>
 dockerAptCache() {
@@ -124,36 +179,11 @@ dockerCopy() {
   return $errc
 }
 
-# create dir inside repo: dockerMakeDir <dir>
-dockerMakeDir() {
-  dockerDirExec "" mkdir $@
-}
+# endregion
 
-# delete dir inside repo: dockerMakeDir <dir>
-dockerRmDir() {
-  dockerExec rm -rf $@
-}
+#? module init
 
-# create guest fhs
-function guestClearFHS () {
-  [[ -d $(dockerRelativePath "") ]] && dockerRmRepo
-}
-
-# fixme: ugly
-# create guest fhs
-function guestCreateFHS () {
-  local wdir=$(dockerRelativePath )
-  local btree=$(dockerRelativePath "btree")
-  local sh=$(dockerRelativePath "sh")
-  local dbin=$(dockerRelativePath "dbin")
-  local dsrc=$(dockerRelativePath "dsrc")
-  local tmp=$(dockerRelativePath "tmp")
-  [ ! -d $wdir ]  && dockerMakeRepoDir
-  [ ! -d $btree ] && dockerMakeDir $(tagValue "btree")
-  [ ! -d $sh ]    && dockerMakeDir $(tagValue "sh")
-  [ ! -d $dbin ]  && dockerMakeDir $(tagValue "dbin")
-  [ ! -d $dsrc ]  && dockerMakeDir $(tagValue "dsrc")
-  [ ! -d $tmp ]   && dockerMakeDir $(tagValue "tmp")
-}
-
-dockerInit
+if [[ -n $SHDPKG_USEDOCKER ]]; then
+  GUEST_PID=$(dockerInit)
+  [[ -z $GUEST_PID ]] && error 1 DKR "docker bkend init fail"
+fi

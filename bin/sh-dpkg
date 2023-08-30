@@ -4,32 +4,58 @@
 # @description Run with:
 #                - `sh-dpkg source [opts] <pkg>` to gather the source;
 #                - `sh-dpkg tree [opts] <pkg>` to build depends tree;
-#                - `sh-dpkg dload [opts] <pkg>` to download binary debs;
-#                - `sh-dpkg install [opts] <pkg>` to download binary debs related to sources;
-#                - `sh-dpkg binary [opts] <pkg>` to build binary debs from sources;
-#                - `sh-dpkg purge [opts] <pkg>` to uninstall binary debs.
+#                - `sh-dpkg walk [opts] <pkg>` to compose depends tree;
+#                - `sh-dpkg dload [opts] <pkg>` to download build-depends debs;
+#                - `sh-dpkg inst [opts] <pkg>` to install build-depends;
+#                - `sh-dpkg deb [opts] <pkg>` to build binary debs from sources;
+#                - `sh-dpkg purge [opts] <pkg>` to uninstall binary debs;
+#                - `sh-dpkg all [opts] <pkg>` all of above;
+#                - `sh-dpkg clear [opts] <stage> <pkg|all>` clear results of <stage> for <pkg|all>.
 #              Use `--local` (default) to run script locally or `--docker` to use docker backend.
+#              To mandatory rerun step - specify `--force`.
 
 #? defaults
-
 # todo: configure.in
 LIBS="$SHDPKG_LIBS"
 
-# fixme: temporary
-SHDPKG_USEDOCKER=1; SHDPKG_LCRUN=""
-# [[ "${2// /}" == "--docker" ]] && (SHDPKG_USEDOCKER=1; SHDPKG_LCRUN="") || (SHDPKG_USEDOCKER=""; SHDPKG_LCRUN=1)
+source $LIBS/globals.sh
+source $LIBS/log.sh
+
+#? opts
+[[ " ${STAGES[@]} " == *" $1 "* ]] && stage="$1" && shift || error 1 sh-dpkg "what y want from me?"
+opts="--none"; [[ "${1:0:1}" == '-' ]] && opts="$1" && shift
+
+#* defaults # fixme: switch to local backend after packaging
+SHDPKG_USEDOCKER=1; SHDPKG_LCRUN=""; SHDPKG_FORCE=""
+case "$opts" in
+  '--docker') SHDPKG_USEDOCKER=1 ;;
+   '--local') SHDPKG_LCRUN=1 ;;
+   '--force') SHDPKG_FORCE="--force" ;;
+    '--none') ;;
+           *) error 1 sh-dpkg "mess in opts" ;;
+esac
+
+declare -a tasks=($@)
 
 #? include
 
-source $LIBS/globals.sh
 source $LIBS/test.sh # todo: configure.in
-source $LIBS/log.sh
 source $LIBS/tag.sh
 source $LIBS/bspec.sh
-
-
+source $LIBS/debver.sh
 source $LIBS/bkend.sh
-# source $LIBS/task-lib
-# source $LIBS/build-lib
+source $LIBS/stage.sh
+source $LIBS/task.sh
+source $LIBS/breq.sh
+source $LIBS/build.sh
 
-#? init
+#? main
+
+for task in "${tasks[@]}"; do
+  logHead "$task" "stage init ..."
+  stageInit "$SHDPKG_FORCE" "$task" "$stage"
+  logStatus "ok"
+  logHead "$task" "$stage stage ...";
+  rv=$(stageExec $task $stage)
+  [[ $? -gt 0 ]] && error 1 sh-dpkg "stage \'$stage\' for $task stopped"
+done

@@ -4,7 +4,16 @@
 
 # region #! breq strings funcs
 
-# pack depends to spaceless string: breqPackString <string>
+# @description Function to pack depends to spaceless string.
+#
+# @example
+#    $(breqPackString <string>)
+#
+# @arg string to pack
+#
+# @stdout packed string
+#
+# @internal
 breqPackString() {
   local str="$1"
   # str=$(tr -cd '[:print:]' <<< "$str")
@@ -12,14 +21,32 @@ breqPackString() {
   echo "$str"
 }
 
-# unpack spaceless string: breqUnpackString <string>
+# @description Function to unpack spaceless string.
+#
+# @example
+#    $(breqUnpackString <string>)
+#
+# @arg string to unpack
+#
+# @stdout unpacked string
+#
+# @internal
 breqUnpackString() {
   local str="$1"
   str="${str//'&'/' '}"
   echo "$str"
 }
 
-# unpack and call taskParseBR: breqParsePacked <string>
+# @description Function to unpack string and call taskParseBR.
+#
+# @example
+#    $(breqParsePacked <string>)
+#
+# @arg string to pack
+#
+# @stdout parsed string
+#
+# @internal
 breqParsePacked() {
   local unpacked=$(breqUnpackString "$1")
   # fixme: package:any hack
@@ -32,11 +59,10 @@ breqParsePacked() {
 
 # region #! version funcs
 
-# check version reqs and return index of suitable: breqWhichVersion <cond> <@versions>
-# @description Function to find suitable package from available packages accroding dependency requrenment string.
+# @description Function to check version reqs and return index of suitable.
 #
 # @example
-#    $(breqWhichVersion <req> <packages>)"
+#    $(breqWhichVersion <req> <packages>)
 #
 # @arg `req` requrenment string like ">= 2.4 2.31-13+deb11u6".
 # @arg packages array of available in [bspec](./lib-bspec) format.
@@ -77,7 +103,7 @@ breqSeenBefore() {
   local bspec="$1"
   local bname=$(bspecName "$bspec")
   local bver=$(bspecVersionHR "$bspec")
-  mapfile -t lines < "$BREQ_DIR/$task/$BREQ_FLATTEN"
+  mapfile -t lines < "$TDIR/$BREQ_FLATTEN"
   for line in "${lines[@]}"; do
     line=$(sed 's/^\([0-9]\+\s\+\)\(.*\)$/\2/' <<< "$line")
     local la=(${line})
@@ -132,9 +158,10 @@ breqAddNode() {
   local bver=$(bspecVersionHR "$bspec")
 
   local task=($@); task="${task[0]}"
+  local TDIR="$STAMPD/$task/tree"
 
-  if [[ $(grep -c "$bname" < "$BREQ_DIR/$task/$BREQ_FLATTEN") -eq 0 ]] ||
-     [[ $(grep -c "$bname" < "$BREQ_DIR/$task/.virtuals") -eq 0 ]]
+  if [[ $(grep -c "$bname" < "$TDIR/$BREQ_FLATTEN") -eq 0 ]] ||
+     [[ $(grep -c "$bname" < "$TDIR/.virtuals") -eq 0 ]]
   then
     # todo: perfomance inpact -> find way to move lover
     local str=$(dockerAptCache "$bname")
@@ -149,11 +176,11 @@ breqAddNode() {
         [[ "$bver" == "$virt_vrq" ]] && break
       done
       if [[ $i -gt ${#pva[@]} ]]; then
-        breqPrintStatus $level "err" "!prov"
+        logTabStatus $level "err" "!prov"
         echo "$bspec" # pass current package upstack
         return 1 #! no providers for virtual isn't good - lets caller decide
       fi
-      echo "$bname $virt_name" >> "$BREQ_DIR/$task/.virtuals"
+      echo "$bname $virt_name" >> "$TDIR/.virtuals"
       local str=$(dockerAptCache "$virt_name=$virt_ver")
       bspec="$virt_name/$virt_ver"
       bname=$(bspecName $bspec)
@@ -166,27 +193,31 @@ breqAddNode() {
   local pa=($@) # parents array
   local parent="${pa[-1]}" # prev node
   local pinfo # parents str separated by "/"
-  local req_dir="$BREQ_DIR" # path to store node info
+  local req_dir="$TDIR" # path to store node info
   local is_cyclic cyclic_dir cyclic_parent
 
+  local skip_root=1
   local prev_idx=-1
   for p in "${pa[@]}"; do
     pinfo+="/$p"
-    req_dir+="/$p"
+    [[ -z $skip_root ]] && req_dir+="/$p"
+    unset skip_root
     prev_idx=$(( $prev_idx + 1 ))
-    #* if bname in parents, trigger cycle checks
+    # if bname in parents, trigger cycle checks
     if [[ "$p" == "$bname" ]]; then
       is_cyclic="true"
       cyclic_dir="$req_dir"
       if [[ $prev_idx -ge 0 ]]; then # store cyclic parent
         cyclic_parent=${pa[$prev_idx]}
       else #! cyclic source is task themself - giving up
-        breqPrintStatus $level "err" "unbreakable circle"
+        logTabStatus $level "err" "unbreakable circle"
         echo "$bspec"  # pass current package upstack
         return 1
       fi
     fi
   done
+  # echo "$req_dir" >&2
+  # error 1 tst tst
 
   req_dir+="/$bname"
   pinfo="${pinfo:1}"
@@ -196,7 +227,7 @@ breqAddNode() {
   echo "$parent" > "$req_dir/.parent"
   #? ---- /init ----
 
-  breqPrintName $level "$pinfo/$bname"
+  logTabHead $level "$pinfo/$bname"
 
   #? ---- cyclic depend ----
   if [[ -n $is_cyclic ]]; then # yep, cyclic dependecy
@@ -205,10 +236,10 @@ breqAddNode() {
     # mark nodes
     echo "$bspec" > "$cyclic_dir/.cyclic"
     echo "$cyclic_bspec" > "$req_dir/.cyclic"
-    breqPrintStatus $level "warn" "cyclic";
+    logTabStatus $level "warn" "cyclic";
     retcode=0
     if [[ "$cyclic_bspec" != "$bspec" ]]; then # node of cycle may be with diff version req
-      #* package may depend on other version, can we solve?
+      # package may depend on other version, can we solve?
       local ver_rw
       if [[ -n "$cyclic_bver" && -n "$bver" ]]; then
         ver_rw=$(dverCompose "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)")
@@ -217,11 +248,11 @@ breqAddNode() {
         testAddToVReqSamples "$(bspecVersionHR $cyclic_bspec)" "$(bspecVersionHR $bspec)" "$ver_rw" "$ver_code"
         if [[ "$ver_code" -gt 0 ]]; then #! cannot compose vreqs - giving up
           if [[ "$ver_code" -eq 2 ]]; then # todo: implement '> <' composition
-            breqPrintStatus $level "warn" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => !impl'
+            logTabStatus $level "warn" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => !impl'
             echo "$bspec"
             return 0 #! not implemented must not be a caller problem
           else
-            breqPrintStatus $level "err" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\""
+            logTabStatus $level "err" "ver:rw \"${cyclic_bver// /} U ${bver// /}\""' => '"\"${ver_rw// /}\""
             echo "$bspec" # pass current package upstack
             return 0 # cyclic themselfs isn't failure
           fi
@@ -229,7 +260,7 @@ breqAddNode() {
       else
         [[ -n "$cyclic_bver" ]] && ver_rw="$cyclic_bver" || ver_rw="$bver"
       fi
-      breqPrintStatus $level "warn" "ver:add \"${ver_rw// /}\"";
+      logTabStatus $level "warn" "ver:add \"${ver_rw// /}\"";
     fi
     echo "$bspec" # pass current package upstack
     return 0 # cyclic themselfs isn't failure
@@ -242,8 +273,8 @@ breqAddNode() {
   if [[ -n $is_seen ]]; then
     #? add as endpoint for vreq checks
     # todo: do more clever realisation
-    echo "$level $bspec" >> "$BREQ_DIR/$task/$BREQ_FLATTEN"
-    breqPrintStatus $level "have" "$bname"
+    echo "$level $bspec" >> "$TDIR/$BREQ_FLATTEN"
+    logTabStatus $level "have" "$bname"
     echo "$retvalue"
     return 0
   fi
@@ -259,7 +290,7 @@ breqAddNode() {
     da+=($line)
   done
 
-  #* nodeps is ok - check for cyclic we done earlier
+  # nodeps is ok - check for cyclic we done earlier
   if [[ ${#da[@]} -eq 0 ]]; then
     # fixme: possible bug
     if [[ "${bver:0:1}" == '>' || "${bver:0:1}" == '<' || "${bver:0:1}" == '=' ]]; then
@@ -274,7 +305,7 @@ breqAddNode() {
         [[ -n $(dverMatch "$new_vr" "${newver_a[$vidx]}") ]] && break
       done
       if [[ $vidx -ge ${#newver_a[@]} ]]; then
-        breqPrintStatus $level "err" "!ver"
+        logTabStatus $level "err" "!ver"
         echo "$bspec"
         return 1 #! nover
       fi
@@ -293,17 +324,17 @@ breqAddNode() {
     provides=$(breqParsePacked "${provides[@]}")
     provides=$(sed 's/\/=/\//g' <<< "$provides") # remove = from provides
     #? ---- /provides ----
-    echo "$level $bname/$bver $provides" >> "$BREQ_DIR/$task/$BREQ_FLATTEN" # todo: cover with tests
+    echo "$level $bname/$bver $provides" >> "$TDIR/$BREQ_FLATTEN" # todo: cover with tests
     # fixme: not actualy needed
     echo "$provides" > "$req_dir/.provides" # save depend's provides
-    breqPrintStatus $level "nodep"
+    logTabStatus $level "nodep"
     echo "$retvalue"  # don't mutate retvalue
     return 0
   fi
   #? ---- /depends ----
 
   #? ---- versions logic ----
-  #* avaible versions
+  # avaible versions
   local vstr=$(sed -n 's/^Version: \(.*\)$/\1/1p' <<< "$str")
   local va
   for line in ${vstr//"\n"/ }; do
@@ -311,21 +342,21 @@ breqAddNode() {
     va+=($line)
   done
 
-  #* which version is needed?
+  # which version is needed?
   local idx=0
   if [[ -n $bver ]] ; then
     # fixme: add propper parsing for: <!nocheck> [linux-any]
     if [[ $bver != '<!nocheck>' ]] && [[ $bver != '[linux-any]' ]]; then
       idx=$(breqWhichVersion "$bver" "${va[@]}")
       if [[ $? -gt 0 ]]; then
-        breqPrintStatus $level "err" "!ver"
-        #* general error - mutating retcode & retvalue to this dependency
+        logTabStatus $level "err" "!ver"
+        # general error - mutating retcode & retvalue to this dependency
         echo "$bspec" # pass current package upstack
         return 1 #! nover isn't good - lets caller decide
       fi
     fi
   fi
-  local bdeps="${da[$idx]}" #* this is our set
+  local bdeps="${da[$idx]}" # this is our set
   # update bspec, bver to selected version
   bver="${va[$idx]}"
   bspec="$bname/$bver"
@@ -343,7 +374,7 @@ breqAddNode() {
   local provides="${prov_a[$idx]}"
   provides=$(breqParsePacked "${provides[@]}")
   provides=$(sed 's/\/=/\//g' <<< "$provides") # remove = from provides
-  echo "$level $bspec $provides" >> "$BREQ_DIR/$task/$BREQ_FLATTEN" # todo: cover with tests
+  echo "$level $bspec $provides" >> "$TDIR/$BREQ_FLATTEN" # todo: cover with tests
   # fixme: not actualy needed
   echo "$provides" > "$req_dir/.provides" # save depend's provides
   #? ---- /provides ----
@@ -353,8 +384,8 @@ breqAddNode() {
     pa+=("$bname")
     local curset=$(breqParsePacked $curset_packed)
     for bi in ${curset[@]} ; do
-      echo -ne $(breqRepStr "$level" "\n" "\t" '-> ') >&2
-      #* dive deeper
+      echo -ne $(logRepStr "$level" "\n" "\t" '-> ') >&2
+      # dive deeper
       retvalue=$(breqAddNode $level "$bi" "$retvalue" "${pa[@]}")
       local retcode="$?"
       [[ $retcode -gt 0 ]] && break;
