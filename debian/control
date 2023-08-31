@@ -1,0 +1,8 @@
+Source: sh-dpkg
+Binary: sh-dpkg
+Architecture: any all
+Version: 0.0.1~poc
+Priority: optional
+Build-Depends: bash
+Maintainer: Rinat Levchuk <rinat.Levchuk@gmail.com>
+Homepage: https://github.com/bricks-can-fly/deb-repo/tree/master

@@ -1,0 +1,12 @@
+#!/usr/bin/env make -f
+
+clean:
+  rm -rf debian/bin
+  rm -rf debian/share
+  rm -rf debian/README.md
+
+configure:
+
+build:
+
+install:
