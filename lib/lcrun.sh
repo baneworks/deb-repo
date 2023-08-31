@@ -51,12 +51,13 @@ lcrunWrite() {
 
 # @description Function to ls.
 #
+# @arg opts - dir inside repo
 # @arg dir - dir inside repo
 # @arg pattern - pattern
 #
 # @internal
 lcrunLs() {
-  echo `/usr/bin/env ls $LC_REPO/$1/$2`
+  echo `/usr/bin/env ls $1 $LC_REPO/$2/$3`
 }
 
 # @description Function to copy file to guest FS.

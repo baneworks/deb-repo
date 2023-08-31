@@ -104,19 +104,20 @@ function dockerPath() {
 #
 # @internal
 dockerWrite() {
-  local cmd="echo '""$2""' >> $DC_REPO/""$1"
+  local cmd="echo \'$2\' >> $DC_REPO/$1"
   dockerExec "" "$cmd"
 }
 
 # @description Function to ls.
 #
+# @arg opts - dir inside repo
 # @arg dir - dir inside repo
 # @arg pattern - pattern
 #
 # @internal
 dockerLs() {
-  local cmd="$(dockerPath $1)/$2"
-  local rv=`/usr/bin/env ls $cmd`
+  local cmd="$(dockerPath $2)/$3"
+  local rv=`/usr/bin/env ls $1 $cmd`
   echo "$rv"
 }
 
