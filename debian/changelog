@@ -1,0 +1,5 @@
+sh-dpkg (0.0.1~alpha) bullseye; urgency=low
+
+  * skel
+
+ -- Rinat Levchuk <bane.tsk@gmail.com>  Thu, 31 Aug 2023 08:59:39 +0700
