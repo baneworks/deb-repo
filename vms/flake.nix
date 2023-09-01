@@ -17,6 +17,14 @@
   outputs = { self, nixpkgs, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
+        # mantainer handle
+        bricks-can-fly = {
+          email = "rinat.levchuk@gmail.com";
+          name = "Rinat Levchuk";
+          matrix = "@bricks-can-fly:tchncs.de";
+          github = "bricks-can-fly";
+          githubId = 61814397;
+        };
         pkgs = nixpkgs.legacyPackages.${system};
         legacyArchTag = if system == "x86_64-linux"
                   then "amd64"
@@ -40,6 +48,29 @@
         #   src = ./.;
         #   inherit system;
         # };
+        sh-doc = with pkgs; stdenv.mkDerivation rec {
+          pname = "shdoc";
+          version = "1.2";
+          src = fetchFromGitHub {
+            owner = "reconquest";
+            repo = "shdoc";
+            rev = "v${version}";
+            sha256 = "sha256-oBOXeISPv43VgE6bzPzr6BvVfFwDo1Wx7ekp07w9h6s=";
+          };
+          buildInputs = [ gawk ];
+          phases = [ "installPhase" ];
+          installPhase = ''
+            install -Dm755 $src/shdoc $out/bin/shdoc
+            sed -i $out/bin/shdoc -e 's/^\#!\/usr\/bin\/gawk -f/#!\/usr\/bin\/env -S gawk -f/'
+          '';
+          meta = with lib; {
+            description = "An markdown API documentation generator from shell scripts source";
+            license = licenses.mit;
+            maintainers = [ bricks-can-fly ];
+            homepage = "https://github.com/reconquest/shdoc";
+            platforms = lib.platforms.unix;
+          };
+        };
         aptListsDebianBbullseye = with pkgs; stdenv.mkDerivation {
           name = "debian-bullseye-apt-lists";
           phases = [ "installPhase" ];
@@ -183,6 +214,7 @@
       in {
         packages = {
           # debian-bullseye-chroot = chrootDebianBullseye;
+          shdoc = sh-doc;
           debian-bullseye-apt-lists = aptListsDebianBbullseye;
           debian-bullseye-docker = dockerDebianBbullseyeSlim;
           run-debian-bullseye = runDebianBullseye;
@@ -202,7 +234,8 @@
             # pkgs.nix-prefetch-docker
             # pkgs.dive
             # pkgs.cmake
-            # pkgs.gnumake
+            sh-doc
+            pkgs.gnumake
             aptListsDebianBbullseye
             # dockerDebianBbullseyeSlim
             runDebianBullseye
