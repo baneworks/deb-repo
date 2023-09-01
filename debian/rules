@@ -1,12 +1,15 @@
-#!/usr/bin/env make -f
+#!/usr/bin/make -f
 
-clean:
-  rm -rf debian/bin
-  rm -rf debian/share
-  rm -rf debian/README.md
+%:
+	dh $@
 
-configure:
+override_dh_auto_install:
+	install -D $(CURDIR)/bin/sh-dpkg $(CURDIR)/debian/sh-dpkg/usr/bin/sh-dpkg
+	mkdir -p $(CURDIR)/debian/sh-dpkg/usr/share/sh-dpkg
+	cp -a $(CURDIR)/share/* $(CURDIR)/debian/sh-dpkg/usr/share/sh-dpkg
+	mkdir -p $(CURDIR)/debian/sh-dpkg/usr/share/doc/sh-dpkg
+	cp -a $(CURDIR)/doc/* $(CURDIR)/debian/sh-dpkg/usr/share/doc/sh-dpkg
 
-build:
-
-install:
+	# mv $(CURDIR)/debian/cowsay/usr/share/cowsay/cows/bong.cow $(CURDIR)/debian/cowsay/usr/share/cowsay/cows/beavis.zen.cow $(CURDIR)/debian/cowsay/usr/share/cowsay/cows/mutilated.cow $(CURDIR)/debian/cowsay-off/usr/share/cowsay/cows
+	# rm $(CURDIR)/debian/cowsay/usr/share/cowsay/cows/mech-and-cow
+	# rm $(CURDIR)/debian/cowsay/usr/share/cowsay/cows/head-in.cow

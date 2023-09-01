@@ -153,49 +153,56 @@ For example, in cyclic depends like shown resulting flat list will be as:
 libc6 libgcc-s1 libgcc1 gcc-10-base libcrypt1
 ```
 
-# Preparing environment
+## Realisation details
 
-As I working within [NixOS](https://nixos.org/) usage of debian native build stack is a kind tricky. The
-main difficulty lies in the side effects of the storage system when we trying to chroot in debootstraped
-guest system. For extra fun, as if the `NixOS` FHS incompatibility wasn't enough, the `debootstrap` utility
-appears to be broken and abandoned. Well, having fun is having fun, so ...
+See docs.
 
-Since we need a working environment for the Debian build stack, the obvious solution is to use qemu guest
-and do all the work inside.
+# Working environment
 
-However, I am implementing another option - creating a working environment using NixOS (development shell
-inside `nix flake`) with the necessary docker containers inside the environment and automated logging into
-(`direnv`), updating and starting containers. See [flake.nix](./vms/flake.nix) for implementation details.
+As I working within NixOS usage of debian native build stack is a kind tricky. So, to get a working
+environment I use combination of NixOS development shell and `direnv` to automate updating and starting
+containers. See [flake.nix](./vms/flake.nix) for implementation details.
 
 To use the environment:
 
 1. cd to `vms` folder
 2. wait for `direnv` invoke `nix flake` and rebuild (if needed) containers, packages, scrips
-3. use `run-debian-bullseye [root] [bg]` to run container with or without enter into as user `mtain` (or
+3. use `run-debian-bullseye [bg]` to run container with or without enter into as user `mtain` (or
     `root`)
 4. work inside container or use ssh to connect from host
 
+# Installation
+
+Binary package is `sh-dpkg_0.0.1~alpha_amd64.deb`. To build package you need an working docker container
+named 'debian'. If so, build package with `make deb`. To rebuild documentation - use `make build_doc`.
+
 # Usage
 
-List of packages needed to build taken from [packages.built](./packages.built).
+`sh-dpkg` can be executed in two ways, inside (default) or outside of debian (using docker as backend). To
+use docker backend specify `--docker` option to `sh-dpkg`. For realisation details see
+[docker.sh](./docs/docker.md), [lcrun.sh](./docs/lcrun.md), [bkend.sh](./docs/bkend.md). Also,`sh-dpkg`
+splits the whole work to separated stages, see [stage.sh](./docs/stage.md).
 
-Since debootstrapped debian not even allow to work with .tar.xv all work is performed on the host. This includes
-preparing the container for assembly, parsing DSC files and collecting dependencies.
+Work stages are:
 
-If the parsing of the package dependency tree was successful, we install the required dependencies in the
-container and trying to build a package.
+1. Gathering the source `sh-dpkg source [opts] <pkg>` to gather the source.
+2. Building depends tree `sh-dpkg tree [opts] <pkg>`.
+3. Composing depends tree `sh-dpkg walk [opts] <pkg>`.
+4. Downloading build-depends and it depends `sh-dpkg dload [opts] <pkg>`.
+5. Installing depends `sh-dpkg inst [opts] <pkg>`.
+6. Building package `sh-dpkg deb [opts] <pkg>`.
+7. Uninstalling depends  `sh-dpkg purge [opts] <pkg>`.
 
-1. From the `~/dev/deb-repo/vms`, load and run debian image (basically is pure bullseye-slim).
+And few special targets: `sh-dpkg all [opts] <pkg>` to do all in once, and
+`sh-dpkg clear [opts] <stage> <pkg|all>` clear all results.
 
-```sh
-./run-debian-bullseye
-```
+Accepted options is:
 
-2. Run `~/dev/deb-repo/make-repo` on the host and wait for the build to complete.
+1. `--local` (default) to run script locally
+2. `--docker` to use docker backend.
+3. `--force` to mandatory rerun stage
 
-# Results
-
-Results of `~/dev/deb-repo/make-repo` with **cyclic vetrex detection** is:
+For example ,results of `tree` stage looks like:
 
 ```sh bash
 ❯❯❯ make-repo
@@ -252,7 +259,5 @@ Version specification rewrite for end nodes of graph not supported, script just 
 For educational purposes, nodes whose dependencies have already been processed are not added to the
 `.flatten`, respectively, the branches below the first root are not complete and cannot be processed
 independently. In a normal implementation, of course, nodes already encountered should be supplemented.
-
-# TODO
 
 # References

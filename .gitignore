@@ -5,5 +5,8 @@ tmp
 .vscode
 .direnv
 result
+tests
+dsrc
+dbin
 deb.debian.org_*
 .prev_image

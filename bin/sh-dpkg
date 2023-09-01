@@ -26,7 +26,8 @@ source $LIBS/log.sh
 opts="--none"; [[ "${1:0:1}" == '-' ]] && opts="$1" && shift
 
 #* defaults # fixme: switch to local backend after packaging
-SHDPKG_USEDOCKER=1; SHDPKG_LCRUN=""; SHDPKG_FORCE=""
+SHDPKG_USEDOCKER=1; SHDPKG_LCRUN=""
+SHDPKG_FORCE=""
 case "$opts" in
   '--docker') SHDPKG_USEDOCKER=1 ;;
    '--local') SHDPKG_LCRUN=1 ;;

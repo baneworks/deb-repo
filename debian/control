@@ -1,8 +1,14 @@
 Source: sh-dpkg
-Binary: sh-dpkg
-Architecture: any all
-Version: 0.0.1~poc
+Section: tools
 Priority: optional
-Build-Depends: bash
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 0.0.1~alpha
 Maintainer: Rinat Levchuk <rinat.Levchuk@gmail.com>
-Homepage: https://github.com/bricks-can-fly/deb-repo/tree/master
+Homepage: https://github.com/bricks-can-fly/deb-repo
+
+Package: sh-dpkg
+Architecture: any
+Depends: bash
+Essential: no
+Description: dpkg realisation on bash
+ Just for fun dpkg realisation on bash.
